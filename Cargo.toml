@@ -1,0 +1,15 @@
+[package]
+name = "osint-master"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive", "color"] } # For CLI structure
+reqwest = { version = "0.11", features = [
+    "json",
+] } # For API and username lookups
+tokio = { version = "1.0", features = ["full"] } # For async performance
+serde = { version = "1.0", features = ["derive"] } # For data handling
+serde_json = "1.0" # For structured output
+trust-dns-resolver = "0.22" # For custom domain enumeration logic
+anyhow = "1.0.100"
