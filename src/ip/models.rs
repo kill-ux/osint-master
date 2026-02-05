@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-pub const IP_API_FIELDS: usize = 454553599;
-
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IpReport {
@@ -11,7 +9,8 @@ pub struct IpReport {
     pub query: String, // The IP address searched
 
     #[serde(flatten)]
-    pub details: Option<IpDetails>
+    pub details: Option<IpDetails>,
+    pub additinal_data: Option<WhoisInfo>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -39,4 +38,46 @@ pub struct IpDetails {
     pub mobile: bool,  // Is the user on a cellular network?
     pub proxy: bool,   // Is this a known Proxy, VPN, or Tor node?
     pub hosting: bool, // Is this a Data Center (e.g., AWS/DigitalOcean)?
+}
+
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct WhoisInfo {
+    pub org_name: Option<String>,
+    pub country: Option<String>,
+    pub asn: Option<String>,
+    pub abuse_email: Option<String>,
+    pub abuse_phone: Option<String>,
+    pub state: Option<String>,
+    pub postal_code: Option<String>,
+    pub net_range: Option<String>,
+    pub cidr: Option<String>,
+}
+
+pub fn parse_whois(text: String) -> WhoisInfo {
+    let mut info = WhoisInfo::default();
+    for ele in text.lines() {
+        let line: &str = ele.trim();
+        let mut value = None;
+        if line.contains(":") {
+            value = Some(line.split(":").nth(1).unwrap_or("").trim().to_string())
+        }
+        if line.starts_with("OrgName:") {
+            info.org_name = value
+        } else if line.starts_with("Country") {
+            info.country = value
+        } else if line.starts_with("OrgAbuseEmail") {
+            info.abuse_email = value
+        } else if line.starts_with("OrgAbusePhone") {
+            info.abuse_phone = value
+        } else if line.starts_with("StateProv") {
+            info.state = value
+        } else if line.starts_with("PostalCode") {
+            info.postal_code = value
+        } else if line.starts_with("NetRange") {
+            info.net_range = value
+        } else if line.starts_with("CIDR") {
+            info.cidr = value
+        }
+    }
+    info
 }

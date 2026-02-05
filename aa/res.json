@@ -18,5 +18,14 @@
   "reverse": null,
   "mobile": false,
   "proxy": false,
-  "hosting": true
+  "hosting": true,
+  "org_name": "Google LLC",
+  "country": "US",
+  "asn": null,
+  "abuse_email": "network-abuse@google.com",
+  "abuse_phone": "+1-650-253-0000",
+  "state": "CA",
+  "postal_code": "94043",
+  "net_range": "8.8.8.0 - 8.8.8.255",
+  "cidr": "8.8.8.0/24"
 }

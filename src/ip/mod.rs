@@ -1,20 +1,31 @@
 pub mod dns;
 pub mod models;
 
+use std::path::Path;
+
 use anyhow::{Result, bail};
 use colored::Colorize;
-use comfy_table::{Table, presets::UTF8_FULL};
 use reqwest::Client;
 
 use dns::*;
 use models::*;
-use tokio::{fs::File, io::AsyncWriteExt};
+use tokio::{
+    fs::{File, create_dir_all},
+    io::AsyncWriteExt,
+};
+use tracing::warn;
+use whois_rust::{WhoIs, WhoIsLookupOptions};
+
+pub const IP_API_FIELDS: usize = 454553599;
 
 pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()> {
     let ip = resolve_target(&target).await?.to_string();
     let ip_str = ip.as_str();
     println!("Searching IP: {}", ip_str);
-    let report = fetch_data(ip_str).await?;
+    let mut report = fetch_data(ip_str).await?;
+    let text = fetch_whois(ip_str).await?;
+    let info = parse_whois(text);
+    report.additinal_data = Some(info);
     print_report(&report.query, &report.details);
     if let Some(ref path) = output {
         save_report(path, &report).await?;
@@ -28,6 +39,13 @@ pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()>
 
 pub async fn fetch_data(ip: &str) -> Result<IpReport> {
     fetch_data_with_retry(ip, 3).await
+}
+
+pub async fn fetch_whois(ip: &str) -> Result<String> {
+    let whois = WhoIs::from_path("./servers.json")?;
+    let options = WhoIsLookupOptions::from_string(ip)?;
+    let text = whois.lookup(options)?;
+    Ok(text)
 }
 
 async fn fetch_data_with_retry(ip: &str, max_retries: u32) -> Result<IpReport> {
@@ -52,10 +70,9 @@ async fn fetch_data_with_retry(ip: &str, max_retries: u32) -> Result<IpReport> {
         }
 
         let remaining = res.headers().get("X-Rl").and_then(|v| v.to_str().ok());
-        dbg!(remaining);
         let ttl = res.headers().get("X-Ttl").and_then(|v| v.to_str().ok());
         if let (Some(rl), Some(ttl)) = (remaining, ttl) {
-            tracing::debug!("Requests remaining: {}, reset in {}s", rl, ttl);
+            tracing::warn!("Requests remaining: {}, reset in {}s", rl, ttl);
         }
 
         let report: IpReport = res.json().await?;
@@ -72,44 +89,6 @@ async fn fetch_data_with_retry(ip: &str, max_retries: u32) -> Result<IpReport> {
     bail!("Failed after {} retries", max_retries)
 }
 
-pub fn print_report(ip: &str, details: &Option<IpDetails>) {
-    if let Some(details) = details {
-        let mut table = Table::new();
-        table.load_preset(UTF8_FULL).set_header(vec![
-            "Category".on_magenta().black(),
-            "Intelligence".magenta().bold(),
-        ]);
-
-        // .cyan() and .bold() work here, but we must convert to String
-        table.add_row(vec!["Target IP".cyan(), ip.bold()]);
-
-        table.add_row(vec![
-            "Location",
-            &format!("{}, {}", details.city, details.country.bold()),
-        ]);
-        table.add_row(vec!["ISP", &details.isp]);
-
-        let asn_only = details
-            .r#as
-            .split_whitespace()
-            .next()
-            .unwrap_or("N/A")
-            .replace("AS", "");
-        table.add_row(vec!["ASN", &asn_only]);
-
-        let issues = match (details.proxy, details.hosting) {
-            (true, _) => "Flagged: Proxy/VPN detected".red().bold().to_string(),
-            (_, true) => "Note: Data center/Hosting".yellow().to_string(),
-            _ => "✅ No reported abuse (Residential)".green().to_string(),
-        };
-
-        // With "custom_styling" enabled, comfy-table will respect the ANSI codes
-        table.add_row(vec!["Known Issues", &issues]);
-
-        println!("{table}");
-    }
-}
-
 pub async fn save_report(path: &str, report: &models::IpReport) -> Result<()> {
     let res = if path.ends_with("json") {
         serde_json::to_string_pretty(report)?
@@ -120,12 +99,70 @@ pub async fn save_report(path: &str, report: &models::IpReport) -> Result<()> {
             .collect::<Vec<String>>()
             .join("\n")
     };
+    let path = Path::new(path);
+    if let Some(parent) = path.parent() && parent.to_str() != Some("") {
+        warn!("Directory dosn't exist will be created");
+        create_dir_all(parent).await?;
+    }
     let mut fd = File::create(path).await?;
     fd.write_all(res.as_bytes()).await?;
     println!(
-        "💾 {} {}",
+        "{} {}",
         "Data successfully saved to:".green(),
-        path.bold()
+        Path::new(path).to_string_lossy()
     );
     Ok(())
+}
+
+pub fn print_report(ip: &str, details: &Option<IpDetails>) {
+    if let Some(details) = details {
+        println!("{}", "─".repeat(60).bold());
+        println!("{} {}", "TARGET IP:".cyan().bold(), ip.bold());
+        println!("{}", "─".repeat(60).bold());
+
+        // 1. Critical / risk‑related info first
+        let issues = match (details.proxy, details.hosting) {
+            (true, _) => "Flagged: Proxy/VPN detected".red().bold(),
+            (_, true) => "Note: Data center/Hosting".yellow(),
+            _ => "✅ No reported abuse (Residential)".green(),
+        };
+        println!("{} {}", "RISK PROFILE:".cyan().bold(), issues);
+
+        println!(
+            "{} {}",
+            "ASN:".cyan().bold(),
+            details
+                .r#as
+                .split_whitespace()
+                .next()
+                .unwrap_or("N/A")
+                .replace("AS", "")
+                .bold()
+        );
+
+        println!("{} {}", "ISP:".cyan().bold(), details.isp.bold());
+
+        // 2. Location
+        println!(
+            "{} {}",
+            "Location:".cyan().bold(),
+            format!("{}, {}", details.city, details.country.bold())
+        );
+
+        println!("{} {}", "Region:".cyan().bold(), details.region_name.bold());
+        println!("{} {}", "Timezone:".cyan().bold(), details.timezone.bold());
+
+        // 3. Extra flags
+        println!(
+            "{} {}",
+            "Mobile:".cyan().bold(),
+            if details.mobile {
+                "Yes".red().bold()
+            } else {
+                "No".green()
+            }
+        );
+
+        println!("{}", "─".repeat(60).bold());
+    }
 }
