@@ -18,3 +18,7 @@ pub async fn resolve_target(input: &str) -> Result<IpAddr> {
         .map(|socket| socket.ip())
         .ok_or_else(|| anyhow!("No IP addresses found for {}", input))
 }
+
+
+
+// Usage
