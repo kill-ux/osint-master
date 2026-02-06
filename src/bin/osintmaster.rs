@@ -5,6 +5,7 @@ use osint_master::{Cli, Commands, domain, ip, username};
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    tracing_subscriber::fmt::init();
     match cli.command {
         Commands::Ip { address } => ip::run_ip_lookup(address, cli.output).await,
         Commands::User { name } => username::run(name, cli.output).await,

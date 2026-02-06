@@ -21,7 +21,7 @@ pub struct Cli {
     pub command: Commands,
 
     /// File name to save output
-    #[arg(short)]
+    #[arg(short,long, global = true)]
     pub output: Option<String>,
 }
 
