@@ -18,6 +18,17 @@ use whois_rust::{WhoIs, WhoIsLookupOptions};
 
 pub const IP_API_FIELDS: usize = 454553599;
 
+const SERVERS: &str = r#"
+        {
+            "_": {
+                "ip": {
+                    "host": "whois.arin.net",
+                    "query": "n + $addr\r\n"
+                }
+            }
+        }
+    "#;
+
 pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()> {
     let ip = resolve_target(&target).await?.to_string();
     let ip_str = ip.as_str();
@@ -25,7 +36,7 @@ pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()>
     let mut report = fetch_data(ip_str).await?;
     let text = fetch_whois(ip_str).await?;
     let info = parse_whois(text);
-    report.additinal_data = Some(info);
+    report.additional_data = Some(info);
     print_report(&report.query, &report.details);
     if let Some(ref path) = output {
         save_report(path, &report).await?;
@@ -42,9 +53,10 @@ pub async fn fetch_data(ip: &str) -> Result<IpReport> {
 }
 
 pub async fn fetch_whois(ip: &str) -> Result<String> {
-    let whois = WhoIs::from_path("./servers.json")?;
+    let whois = WhoIs::from_string(SERVERS)?;
     let options = WhoIsLookupOptions::from_string(ip)?;
     let text = whois.lookup(options)?;
+    println!("WHOIS text:\n{}", text);
     Ok(text)
 }
 
@@ -100,7 +112,9 @@ pub async fn save_report(path: &str, report: &models::IpReport) -> Result<()> {
             .join("\n")
     };
     let path = Path::new(path);
-    if let Some(parent) = path.parent() && parent.to_str() != Some("") {
+    if let Some(parent) = path.parent()
+        && parent.to_str() != Some("")
+    {
         warn!("Directory dosn't exist will be created");
         create_dir_all(parent).await?;
     }

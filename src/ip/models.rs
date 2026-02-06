@@ -1,3 +1,5 @@
+use std::fmt::format;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -10,7 +12,7 @@ pub struct IpReport {
 
     #[serde(flatten)]
     pub details: Option<IpDetails>,
-    pub additinal_data: Option<WhoisInfo>,
+    pub additional_data: Option<WhoisInfo>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -44,39 +46,45 @@ pub struct IpDetails {
 pub struct WhoisInfo {
     pub org_name: Option<String>,
     pub country: Option<String>,
-    pub asn: Option<String>,
     pub abuse_email: Option<String>,
     pub abuse_phone: Option<String>,
     pub state: Option<String>,
     pub postal_code: Option<String>,
     pub net_range: Option<String>,
     pub cidr: Option<String>,
+    pub address: Option<String>,
 }
 
 pub fn parse_whois(text: String) -> WhoisInfo {
     let mut info = WhoisInfo::default();
     for ele in text.lines() {
-        let line: &str = ele.trim();
+        let line = ele.trim().to_lowercase().to_string();
         let mut value = None;
         if line.contains(":") {
-            value = Some(line.split(":").nth(1).unwrap_or("").trim().to_string())
+            value = Some(ele.trim().split(":").nth(1).unwrap_or("").trim().to_string())
         }
-        if line.starts_with("OrgName:") {
+        if line.starts_with("orgname:") || line.starts_with("netname:") {
             info.org_name = value
-        } else if line.starts_with("Country") {
+        } else if line.starts_with("country:") {
             info.country = value
-        } else if line.starts_with("OrgAbuseEmail") {
+        } else if line.starts_with("orgtechemail:") || line.starts_with("e-mail:") {
             info.abuse_email = value
-        } else if line.starts_with("OrgAbusePhone") {
+        } else if line.starts_with("orgabusephone:") || line.starts_with("phone:") {
             info.abuse_phone = value
-        } else if line.starts_with("StateProv") {
+        } else if line.starts_with("stateprov:") {
             info.state = value
-        } else if line.starts_with("PostalCode") {
+        } else if line.starts_with("postalcode:") {
             info.postal_code = value
-        } else if line.starts_with("NetRange") {
+        } else if line.starts_with("netrange:") || line.starts_with("inetnum:") {
             info.net_range = value
-        } else if line.starts_with("CIDR") {
+        } else if line.starts_with("cidr:") || line.starts_with("route:") {
             info.cidr = value
+        } else if line.starts_with("address:") {
+            if let Some(address) = info.address {
+                info.address = Some(format!("{address} || {}", value.unwrap()))
+            } else {
+                info.address = value
+            }
         }
     }
     info
