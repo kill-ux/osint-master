@@ -4,10 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+
 clap = { version = "4.0", features = ["derive", "color"] } # For CLI structure
 reqwest = { version = "0.11", features = [
     "json",
-] } # For API and username lookups
+    "native-tls",
+    "rustls-tls",
+] } # For API and username lookupsclap = { version = "4.0", features = ["derive", "color"] }         # For CLI structure
 tokio = { version = "1.0", features = ["full"] } # For async performance
 serde = { version = "1.0", features = ["derive"] } # For data handling
 serde_json = "1.0" # For structured output
@@ -20,3 +23,7 @@ tracing = "0.1.44"
 tracing-subscriber = "0.3.22"
 whois-rust = "1.6.0"
 dns-lookup = "3.0.1"
+rustls = "0.23.36"
+openssl = "0.10.75"
+tokio-openssl = "0.6.5"
+chrono = "0.4.43"
