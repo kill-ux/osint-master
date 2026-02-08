@@ -1,16 +1,14 @@
 use std::{
-    collections::{HashMap, HashSet},
-    net::{IpAddr, SocketAddr},
+    collections::{HashMap},
 };
 
-use anyhow::{Result, bail};
+use anyhow::{Result};
+use base64::{Engine, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use colored::Colorize;
 use dns_lookup::lookup_host;
-use openssl::ssl::{SslConnector, SslMethod};
 use reqwest::Client;
 use serde::Deserialize;
-use tracing::warn;
 
 pub async fn run_domain_lookup(target: String, _output: Option<String>) -> Result<()> {
     println!("Searching Domain: {}", target);
@@ -63,68 +61,43 @@ pub async fn run_ctr_sh(target: &str) -> Result<()> {
     let mut domins: Vec<SubdomainInfo> = Vec::new();
     for (domain, cert) in &subdomains {
         // Resolve THIS subdomain's IP
-        match lookup_host(domain) {
-            Ok(mut ips) => {
-                if let Some(ip) = ips.next() {
-                    domins.push(SubdomainInfo {
-                        domain: cert.name_value.clone(),
-                        ip: Some(ip.to_string()),
-                        record_type: "A".to_string(),
-                    });
-                }
-            }
-            Err(_) => {
-                domins.push(SubdomainInfo {
-                    domain: cert.name_value.clone(),
-                    ip: None,
-                    record_type: "NXDOMAIN".to_string(),
-                });
-            }
-        }
+        let mut dm = SubdomainInfo::default();
+        dm.domain = cert.name_value.clone();
+        dm.record_type = "NXDOMAIN".to_string();
+        dm.cert_id = cert.id;
 
-        // Get CERT
-        let clt = reqwest::Client::new();
-        let url = format!("https://crt.sh/?id={}&opt=x509dump", cert.id);
-        let res = clt.get(url).send().await?;
-        if res.status().is_success() {
-            let text = res.text().await?;
-            // dbg!(&text);
-            parse_dump_for_info(&text);
-        } else {
-            warn!("Failed to fetch cert dump for ID {}", cert.id);
-        }
+        if let Ok(mut ips) = lookup_host(domain)
+            && let Some(ip) = ips.next()
+        {
+            dm.ip = Some(ip.to_string());
+            dm.record_type = "A".to_string();
+        };
+
+        get_cert_details_binary(&mut dm).await?;
+        domins.push(dm);
     }
 
     dbg!(&domins);
 
-    // Print results
-    println!(
-        "\n{} Found {} subdomains",
-        "✅".green().bold(),
-        domins.len()
-    );
-    for info in &domins {
-        match &info.ip {
-            Some(ip) => println!("  {} → {}", info.domain.blue().bold(), ip),
-            None => println!("  {} → {}", info.domain.blue().bold(), "no IP".red()),
-        }
-    }
-
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SubdomainInfo {
     pub domain: String,      // e.g. "www.example.com"
     pub ip: Option<String>,  // e.g. "123.123.123.123"
     pub record_type: String, // e.g. "A" or "CNAME"
+    pub issuer: String,
+    pub cert_id: u64,
+    pub expiry: String,
+    pub version: String,
+    pub serial: String,
+    pub signature: String,
 }
 
 pub struct CertDetails {
     pub common_name: String,
     pub sans: Vec<String>,
-    pub issuer: String,
-    pub expiry: String,
 }
 
 // pub fn check_cert(hostname: &str) -> Result<()> {
@@ -160,18 +133,55 @@ mod crt_sh_date_format {
     }
 }
 
-fn parse_dump_for_info(dump: &str) -> (String, String) {
-    let mut issuer = "Unknown".to_string();
-    let mut expiry = "Unknown".to_string();
 
-    for line in dump.lines() {
-        dbg!(line);
-        let line = line.trim();
-        if line.contains("Issuer:") {
-            issuer = line.replace("Issuer:", "").trim().to_string();
-        } else if line.contains("Not After :") {
-            expiry = line.replace("Not After :", "").trim().to_string();
-        }
+use trust_dns_resolver::TokioAsyncResolver;
+use x509_parser::prelude::*;
+
+pub async fn get_cert_details_binary(info: &mut SubdomainInfo) -> Result<()> {
+    let client = reqwest::Client::new();
+    let url = format!("https://crt.sh/?d={}", info.cert_id);
+    let raw_data = client.get(url).send().await?.bytes().await?;
+    let der_data = if raw_data.starts_with(b"-----BEGIN CERTIFICATE-----") {
+        let pem_str = String::from_utf8(raw_data.to_vec())?;
+        let bytes = pem_str
+            .lines()
+            .filter(|line| !line.starts_with("---"))
+            .collect::<String>();
+        general_purpose::STANDARD.decode(bytes)?
+    } else {
+        raw_data.to_vec()
+    };
+
+    // Parse the DER binary data
+    let (_, cert) = X509Certificate::from_der(&der_data)
+        .map_err(|_| anyhow::anyhow!("Failed to parse DER for ID {}", info.cert_id))?;
+
+    let tbs = cert.tbs_certificate;
+
+    // Extracting info with precision
+    let issuer = tbs.issuer.to_string();
+    if let Ok(expiry) = tbs.validity.not_after.to_rfc2822() {
+        info.expiry = expiry;
     }
-    (issuer, expiry)
+
+    info.issuer = issuer;
+
+    info.version = tbs.version.to_string();
+    info.serial = tbs.serial.to_str_radix(16).to_uppercase();
+    info.signature = tbs.signature.algorithm.to_string();
+    info.issuer = tbs.issuer.to_string();
+    info.expiry = tbs
+        .validity
+        .not_after
+        .to_rfc2822()
+        .unwrap_or("".to_string());
+    dbg!(info);
+    Ok(())
 }
+
+
+// pub async fn get_cname(domain: &str) -> Option<String> {
+//     if let Ok(resolver) = TokioAsyncResolver::tokio_from_system_conf() {
+        
+//     };
+// }

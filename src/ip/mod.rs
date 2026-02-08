@@ -56,7 +56,7 @@ pub async fn fetch_whois(ip: &str) -> Result<String> {
     let whois = WhoIs::from_string(SERVERS)?;
     let options = WhoIsLookupOptions::from_string(ip)?;
     let text = whois.lookup(options)?;
-    println!("WHOIS text:\n{}", text);
+    // println!("WHOIS text:\n{}", text);
     Ok(text)
 }
 
