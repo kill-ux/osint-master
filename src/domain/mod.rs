@@ -1,8 +1,6 @@
-use std::{
-    collections::{HashMap},
-};
+use std::collections::HashMap;
 
-use anyhow::{Result};
+use anyhow::{Result, bail};
 use base64::{Engine, engine::general_purpose};
 use chrono::{DateTime, Utc};
 use colored::Colorize;
@@ -59,25 +57,27 @@ pub async fn run_ctr_sh(target: &str) -> Result<()> {
 
     // NOW resolve each subdomain individually
     let mut domins: Vec<SubdomainInfo> = Vec::new();
+     let resolver = TokioAsyncResolver::tokio_from_system_conf()?;
     for (domain, cert) in &subdomains {
         // Resolve THIS subdomain's IP
-        let mut dm = SubdomainInfo::default();
-        dm.domain = cert.name_value.clone();
-        dm.record_type = "NXDOMAIN".to_string();
-        dm.cert_id = cert.id;
+        let mut info = SubdomainInfo::default();
+        info.domain = cert.name_value.clone();
+        info.record_type = "NXDOMAIN".to_string();
+        info.cert_id = cert.id;
 
         if let Ok(mut ips) = lookup_host(domain)
             && let Some(ip) = ips.next()
         {
-            dm.ip = Some(ip.to_string());
-            dm.record_type = "A".to_string();
+            info.ip = Some(ip.to_string());
+            info.record_type = "A".to_string();
         };
 
-        get_cert_details_binary(&mut dm).await?;
-        domins.push(dm);
+        get_cert_details_binary(&mut info).await?;
+        check_takeover(&mut info).await;
+        domins.push(info);
     }
 
-    dbg!(&domins);
+    // dbg!(&domins);
 
     Ok(())
 }
@@ -93,6 +93,7 @@ pub struct SubdomainInfo {
     pub version: String,
     pub serial: String,
     pub signature: String,
+    pub vulnerability: String,
 }
 
 pub struct CertDetails {
@@ -133,8 +134,13 @@ mod crt_sh_date_format {
     }
 }
 
-
-use trust_dns_resolver::TokioAsyncResolver;
+use tracing::warn;
+use trust_dns_resolver::{
+    Resolver, TokioAsyncResolver,
+    config::{ResolverConfig, ResolverOpts},
+    error::ResolveErrorKind,
+    proto::rr::RecordType,
+};
 use x509_parser::prelude::*;
 
 pub async fn get_cert_details_binary(info: &mut SubdomainInfo) -> Result<()> {
@@ -164,6 +170,12 @@ pub async fn get_cert_details_binary(info: &mut SubdomainInfo) -> Result<()> {
         info.expiry = expiry;
     }
 
+    if let Ok(expiry_date) = DateTime::parse_from_rfc2822(&info.expiry) {
+        if expiry_date < Utc::now() {
+            info.vulnerability.push_str(" | EXPIRED_CERTIFICATE");
+        }
+    }
+
     info.issuer = issuer;
 
     info.version = tbs.version.to_string();
@@ -175,13 +187,57 @@ pub async fn get_cert_details_binary(info: &mut SubdomainInfo) -> Result<()> {
         .not_after
         .to_rfc2822()
         .unwrap_or("".to_string());
+
+    // 2. Check for Weak Signatures (SHA-1 OID is 1.2.840.113549.1.1.5)
+    if info.signature == "1.2.840.113549.1.1.5" {
+        info.vulnerability.push_str(" | WEAK_SIG_ALGO_SHA1");
+    }
     dbg!(info);
     Ok(())
 }
 
+pub async fn check_takeover(info: &mut SubdomainInfo) {
+    match resolve_cname(info).await {
+        Ok(cname) => {
+            info.record_type = "CNAME".to_string();
+            let vulnerable_providers = ["github.io", "herokuapp", "s3.amazonaws", "azurewebsites"];
+            for provider in vulnerable_providers {
+                if cname.contains(provider) {
+                    // It points to a cloud service. Is that service actually alive?
+                    if let Some(_) = &info.ip {
+                        info.vulnerability = format!("CRITICAL: Dangling CNAME to {}", provider);
+                    }
+                }
+            }
+        }
+        Err(dns_err) => {
+            warn!("DNS error: {}", dns_err);
+        }
+    }
+}
 
-// pub async fn get_cname(domain: &str) -> Option<String> {
-//     if let Ok(resolver) = TokioAsyncResolver::tokio_from_system_conf() {
-        
-//     };
-// }
+pub async fn resolve_cname(info: &mut SubdomainInfo) -> Result<String> {
+   
+
+    let lookup = match resolver.lookup(&info.domain, RecordType::CNAME).await {
+        Ok(lookup) => lookup,
+        Err(e) => {
+            if matches!(e.kind(), ResolveErrorKind::NoRecordsFound { .. }) {
+                info.record_type = "DNS_MISSING".to_string();
+                info.vulnerability =
+                    "Potential Takeover: Domain exists in logs but has no DNS records".to_string();
+            }
+            bail!("Error: Can't resolve cname".to_string());
+        }
+    };
+
+    // Return the first CNAME target found
+    for record in lookup.iter() {
+        if let Some(cname) = record.as_cname() {
+            // Convert to string and trim the trailing dot
+            return Ok(cname.to_string().trim_end_matches('.').to_string());
+        }
+    }
+
+    bail!("Error: Can't resolve cname".to_string());
+}
