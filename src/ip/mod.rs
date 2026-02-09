@@ -101,6 +101,7 @@ async fn fetch_data_with_retry(ip: &str, max_retries: u32) -> Result<IpReport> {
     bail!("Failed after {} retries", max_retries)
 }
 
+
 pub async fn save_report(path: &str, report: &models::IpReport) -> Result<()> {
     let res = if path.ends_with("json") {
         serde_json::to_string_pretty(report)?

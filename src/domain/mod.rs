@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use anyhow::{Result, bail};
 use base64::{Engine, engine::general_purpose};
@@ -6,9 +6,9 @@ use chrono::{DateTime, Utc};
 use colored::Colorize;
 use dns_lookup::lookup_host;
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-pub async fn run_domain_lookup(target: String, _output: Option<String>) -> Result<()> {
+pub async fn run_domain_lookup(target: String, output: Option<String>) -> Result<()> {
     println!("Searching Domain: {}", target);
     println!(
         "\n{}{}",
@@ -16,7 +16,7 @@ pub async fn run_domain_lookup(target: String, _output: Option<String>) -> Resul
         target.on_bright_blue().black().bold()
     );
     println!("{}", "─".repeat(60).bold());
-    run_ctr_sh(&target).await?;
+    run_ctr_sh(&target, output).await?;
 
     Ok(())
 }
@@ -28,10 +28,21 @@ struct CrtShEntry {
     #[serde(with = "crt_sh_date_format")]
     not_after: DateTime<Utc>,
 }
-pub async fn run_ctr_sh(target: &str) -> Result<()> {
+
+pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioRuntime>>;
+pub async fn run_ctr_sh(target: &str, output: Option<String>) -> Result<()> {
     let client = Client::new();
     let url = format!("https://crt.sh/?q=.{}&output=json", target);
     let res = client.get(url).send().await?;
+
+    if res.status() == reqwest::StatusCode::NOT_FOUND {
+        println!(
+            "{} No subdomains found on crt.sh for {}",
+            "ℹ".blue(),
+            target
+        );
+        return Ok(());
+    }
 
     if !res.status().is_success() {
         return Err(anyhow::anyhow!(
@@ -57,32 +68,58 @@ pub async fn run_ctr_sh(target: &str) -> Result<()> {
 
     // NOW resolve each subdomain individually
     let mut domins: Vec<SubdomainInfo> = Vec::new();
-     let resolver = TokioAsyncResolver::tokio_from_system_conf()?;
-    for (domain, cert) in &subdomains {
-        // Resolve THIS subdomain's IP
-        let mut info = SubdomainInfo::default();
-        info.domain = cert.name_value.clone();
-        info.record_type = "NXDOMAIN".to_string();
-        info.cert_id = cert.id;
+    let resolver = Arc::new(TokioAsyncResolver::tokio_from_system_conf()?); // Res
+    let client = Client::builder()
+        .pool_max_idle_per_host(10) // Keep connections open
+        .build()?;
+    let client = Arc::new(client);
+    let mut set = JoinSet::new();
+    for (_, cert) in subdomains {
+        let res_ptr = resolver.clone();
+        let client_ptr = client.clone();
+        set.spawn(async move {
+            let mut info = SubdomainInfo::default();
+            info.domain = cert.name_value.clone();
+            info.record_type = "NXDOMAIN".to_string();
+            info.cert_id = cert.id;
 
-        if let Ok(mut ips) = lookup_host(domain)
-            && let Some(ip) = ips.next()
-        {
-            info.ip = Some(ip.to_string());
-            info.record_type = "A".to_string();
-        };
+            if let Ok(mut ips) = lookup_host(&info.domain)
+                && let Some(ip) = ips.next()
+            {
+                info.ip = Some(ip.to_string());
+                info.record_type = "A".to_string();
+            } else {
+                check_takeover(&mut info, &res_ptr).await;
+            };
 
-        get_cert_details_binary(&mut info).await?;
-        check_takeover(&mut info).await;
-        domins.push(info);
+            if let Err(err) = get_cert_details_binary(&mut info, client_ptr).await {
+                warn!("{err}");
+            }
+
+            info
+        });
     }
 
-    // dbg!(&domins);
+    while let Some(res) = set.join_next().await {
+        if let Ok(info) = res {
+            domins.push(info);
+        }
+    }
+
+    pretty_print(domins, output).await?;
 
     Ok(())
 }
 
-#[derive(Debug, Default)]
+fn add_vuln(info: &mut SubdomainInfo, msg: &str) {
+    if info.vulnerability.is_empty() {
+        info.vulnerability = msg.to_string();
+    } else {
+        info.vulnerability.push_str(&format!(" | {}", msg));
+    }
+}
+
+#[derive(Debug, Default, Serialize)]
 pub struct SubdomainInfo {
     pub domain: String,      // e.g. "www.example.com"
     pub ip: Option<String>,  // e.g. "123.123.123.123"
@@ -100,13 +137,6 @@ pub struct CertDetails {
     pub common_name: String,
     pub sans: Vec<String>,
 }
-
-// pub fn check_cert(hostname: &str) -> Result<()> {
-//     let connector = SslConnector::builder(SslMethod::tls())?
-//         .use_rustls(false) // force OpenSSL
-//         .build();
-//     Ok(())
-// }
 
 mod crt_sh_date_format {
     use chrono::{DateTime, NaiveDateTime, Utc};
@@ -134,17 +164,21 @@ mod crt_sh_date_format {
     }
 }
 
+use tokio::{
+    fs::{File, create_dir_all},
+    io::AsyncWriteExt,
+    task::JoinSet,
+};
 use tracing::warn;
 use trust_dns_resolver::{
-    Resolver, TokioAsyncResolver,
-    config::{ResolverConfig, ResolverOpts},
-    error::ResolveErrorKind,
+    AsyncResolver, TokioAsyncResolver,
+    error::{ResolveError, ResolveErrorKind},
+    name_server::{GenericConnection, GenericConnectionProvider, TokioRuntime},
     proto::rr::RecordType,
 };
 use x509_parser::prelude::*;
 
-pub async fn get_cert_details_binary(info: &mut SubdomainInfo) -> Result<()> {
-    let client = reqwest::Client::new();
+pub async fn get_cert_details_binary(info: &mut SubdomainInfo, client: Arc<Client>) -> Result<()> {
     let url = format!("https://crt.sh/?d={}", info.cert_id);
     let raw_data = client.get(url).send().await?.bytes().await?;
     let der_data = if raw_data.starts_with(b"-----BEGIN CERTIFICATE-----") {
@@ -172,7 +206,7 @@ pub async fn get_cert_details_binary(info: &mut SubdomainInfo) -> Result<()> {
 
     if let Ok(expiry_date) = DateTime::parse_from_rfc2822(&info.expiry) {
         if expiry_date < Utc::now() {
-            info.vulnerability.push_str(" | EXPIRED_CERTIFICATE");
+            add_vuln(info, "EXPIRED_CERTIFICATE");
         }
     }
 
@@ -190,14 +224,13 @@ pub async fn get_cert_details_binary(info: &mut SubdomainInfo) -> Result<()> {
 
     // 2. Check for Weak Signatures (SHA-1 OID is 1.2.840.113549.1.1.5)
     if info.signature == "1.2.840.113549.1.1.5" {
-        info.vulnerability.push_str(" | WEAK_SIG_ALGO_SHA1");
+        add_vuln(info, "WEAK_SIG_ALGO_SHA1");
     }
-    dbg!(info);
     Ok(())
 }
 
-pub async fn check_takeover(info: &mut SubdomainInfo) {
-    match resolve_cname(info).await {
+pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
+    match resolve_cname(info, resolver).await {
         Ok(cname) => {
             info.record_type = "CNAME".to_string();
             let vulnerable_providers = ["github.io", "herokuapp", "s3.amazonaws", "azurewebsites"];
@@ -205,32 +238,29 @@ pub async fn check_takeover(info: &mut SubdomainInfo) {
                 if cname.contains(provider) {
                     // It points to a cloud service. Is that service actually alive?
                     if let Some(_) = &info.ip {
-                        info.vulnerability = format!("CRITICAL: Dangling CNAME to {}", provider);
+                        add_vuln(info, &format!("CRITICAL: Dangling CNAME to {}", provider));
                     }
                 }
             }
         }
         Err(dns_err) => {
-            warn!("DNS error: {}", dns_err);
+            if let Some(err) = dns_err.downcast_ref::<ResolveError>()
+                && matches!(err.kind(), ResolveErrorKind::NoRecordsFound { .. })
+            {
+                info.record_type = "DNS_MISSING".to_string();
+                add_vuln(
+                    info,
+                    "Potential Takeover: Domain exists in logs but has no DNS records",
+                );
+            } else {
+                warn!("DNS error: {}", dns_err);
+            }
         }
     }
 }
 
-pub async fn resolve_cname(info: &mut SubdomainInfo) -> Result<String> {
-   
-
-    let lookup = match resolver.lookup(&info.domain, RecordType::CNAME).await {
-        Ok(lookup) => lookup,
-        Err(e) => {
-            if matches!(e.kind(), ResolveErrorKind::NoRecordsFound { .. }) {
-                info.record_type = "DNS_MISSING".to_string();
-                info.vulnerability =
-                    "Potential Takeover: Domain exists in logs but has no DNS records".to_string();
-            }
-            bail!("Error: Can't resolve cname".to_string());
-        }
-    };
-
+pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<String> {
+    let lookup = resolver.lookup(&info.domain, RecordType::CNAME).await?;
     // Return the first CNAME target found
     for record in lookup.iter() {
         if let Some(cname) = record.as_cname() {
@@ -240,4 +270,94 @@ pub async fn resolve_cname(info: &mut SubdomainInfo) -> Result<String> {
     }
 
     bail!("Error: Can't resolve cname".to_string());
+}
+
+pub async fn pretty_print(domins: Vec<SubdomainInfo>, output: Option<String>) -> Result<()> {
+    println!(
+        "\n{} {}",
+        "✔".green().bold(),
+        format!("Subdomains found: {}", domins.len()).bold()
+    );
+
+    let mut vulnerabilities = Vec::new();
+
+    for info in &domins {
+        let status_icon = if info.ip.is_some() {
+            "●".green()
+        } else {
+            "○".red()
+        };
+
+        println!(
+            "  {} {} ({})",
+            status_icon,
+            info.domain.bright_white().bold(),
+            info.ip.as_deref().unwrap_or("No IP").dimmed()
+        );
+
+        // Print SSL Status
+        if info.vulnerability.contains("EXPIRED") {
+            println!("    {} {}", "▓ SSL:".yellow(), info.expiry.red());
+        } else if !info.expiry.is_empty() {
+            println!("    {} {}", "▓ SSL:".cyan(), info.expiry.dimmed());
+        }
+
+        // Collect vulnerabilities for the summary section
+        if !info.vulnerability.is_empty() {
+            vulnerabilities.push(info);
+        }
+    }
+
+    // --- CRITICAL SUMMARY SECTION ---
+    if !vulnerabilities.is_empty() {
+        println!(
+            "\n{}",
+            "❗ Potential Vulnerabilities & Risks:"
+                .on_red()
+                .black()
+                .bold()
+        );
+        for vuln in vulnerabilities {
+            println!(
+                "  {} {}\n    {}",
+                "→".red().bold(),
+                vuln.domain.bright_white(),
+                vuln.vulnerability.yellow().italic()
+            );
+        }
+    }
+
+    // --- FILE STATUS ---
+    if let Some(path) = output {
+        save_report(&path, domins).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn save_report(path: &str, domins: Vec<SubdomainInfo>) -> Result<()> {
+    let res = if path.ends_with("json") {
+        serde_json::to_string_pretty(&domins)?
+    } else {
+        serde_txtrecord::to_txt_records(&domins)?
+            .into_iter()
+            .map(|(key, value)| format!("{}: {}", key.to_uppercase(), value))
+            .collect::<Vec<String>>()
+            .join("\n")
+    };
+    let path = Path::new(path);
+    if let Some(parent) = path.parent()
+        && parent.to_str() != Some("")
+    {
+        warn!("Directory dosn't exist will be created");
+        create_dir_all(parent).await?;
+    }
+    let mut fd = File::create(path).await?;
+    fd.write_all(res.as_bytes()).await?;
+    println!(
+        "{} {}",
+        "Data successfully saved to:".green(),
+        Path::new(path).to_string_lossy()
+    );
+    Ok(())
 }
