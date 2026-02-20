@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -13,6 +11,9 @@ pub struct IpReport {
     #[serde(flatten)]
     pub details: Option<IpDetails>,
     pub additional_data: Option<WhoisInfo>,
+
+    pub abuse_score: Option<u32>,
+    pub total_reports: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -61,7 +62,14 @@ pub fn parse_whois(text: String) -> WhoisInfo {
         let line = ele.trim().to_lowercase().to_string();
         let mut value = None;
         if line.contains(":") {
-            value = Some(ele.trim().split(":").nth(1).unwrap_or("").trim().to_string())
+            value = Some(
+                ele.trim()
+                    .split(":")
+                    .nth(1)
+                    .unwrap_or("")
+                    .trim()
+                    .to_string(),
+            )
         }
         if line.starts_with("orgname:") || line.starts_with("netname:") {
             info.org_name = value
