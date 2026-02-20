@@ -8,6 +8,9 @@ use dns_lookup::lookup_host;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+pub mod enumeration;
+pub use enumeration::*;
+
 pub async fn run_domain_lookup(target: String, output: Option<String>, mut threads: usize) -> Result<()> {
     threads = threads.max(1);
     println!("Searching Domain: {}", target);

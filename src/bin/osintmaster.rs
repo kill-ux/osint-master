@@ -1,7 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
 use osint_master::{
-    Cli, Commands, domain::run_domain_lookup, ip::run_ip_lookup, username::run_username_lookup,
+    Cli, Commands,
+    domain::{enumeration, run_domain_lookup},
+    ip::run_ip_lookup,
+    username::run_username_lookup,
 };
 
 #[tokio::main]
@@ -11,7 +14,9 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Ip { address } => run_ip_lookup(address, cli.output).await,
         Commands::User { name } => run_username_lookup(name, cli.output).await,
-        Commands::Domain { name } => run_domain_lookup(name, cli.output, cli.threads).await,
+        Commands::Domain { name } => {
+            enumeration::run_domain_lookup(name, cli.output, cli.threads, true).await
+        }
     }?;
     Ok(())
 }

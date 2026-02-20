@@ -1,0 +1,25 @@
+[
+  {
+    "domain": "learn.zone01oujda.ma",
+    "ip": "172.67.161.154",
+    "record_type": "A",
+    "issuer": "",
+    "expiry": "",
+    "version": "",
+    "serial": "",
+    "signature": "",
+    "vulnerability": "",
+    "ports": [
+      80,
+      443,
+      8080,
+      8443
+    ],
+    "technologies": [
+      "Server: cloudflare"
+    ],
+    "status_code": 301,
+    "server_header": "cloudflare",
+    "title": "01Edu Platform"
+  }
+]
