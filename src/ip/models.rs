@@ -11,6 +11,9 @@ pub struct IpReport {
     #[serde(flatten)]
     pub details: Option<IpDetails>,
     pub additional_data: Option<WhoisInfo>,
+
+    pub abuse_score: Option<u32>,
+    pub total_reports: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

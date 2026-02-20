@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Ip { address } => run_ip_lookup(address, cli.output).await,
         Commands::User { name } => run_username_lookup(name, cli.output).await,
-        Commands::Domain { name } => run_domain_lookup(name, cli.output).await,
+        Commands::Domain { name } => run_domain_lookup(name, cli.output, cli.threads).await,
     }?;
     Ok(())
 }

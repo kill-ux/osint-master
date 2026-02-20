@@ -23,6 +23,10 @@ pub struct Cli {
     /// File name to save output
     #[arg(short,long, global = true)]
     pub output: Option<String>,
+
+    /// Theads
+    #[arg(short,long, global = true, default_value = "1")]
+    pub threads: usize,
 }
 
 

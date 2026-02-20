@@ -8,7 +8,8 @@ use dns_lookup::lookup_host;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-pub async fn run_domain_lookup(target: String, output: Option<String>) -> Result<()> {
+pub async fn run_domain_lookup(target: String, output: Option<String>, mut threads: usize) -> Result<()> {
+    threads = threads.max(1);
     println!("Searching Domain: {}", target);
     println!(
         "\n{}{}",
@@ -16,7 +17,7 @@ pub async fn run_domain_lookup(target: String, output: Option<String>) -> Result
         target.on_bright_blue().black().bold()
     );
     println!("{}", "─".repeat(60).bold());
-    run_ctr_sh(&target, output).await?;
+    run_ctr_sh(&target, output, threads).await?;
 
     Ok(())
 }
@@ -30,7 +31,7 @@ struct CrtShEntry {
 }
 
 pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioRuntime>>;
-pub async fn run_ctr_sh(target: &str, output: Option<String>) -> Result<()> {
+pub async fn run_ctr_sh(target: &str, output: Option<String>,threads: usize) -> Result<()> {
     let client = Client::new();
     let url = format!("https://crt.sh/?q=.{}&output=json", target);
     let res = client.get(url).send().await?;
@@ -74,10 +75,13 @@ pub async fn run_ctr_sh(target: &str, output: Option<String>) -> Result<()> {
         .build()?;
     let client = Arc::new(client);
     let mut set = JoinSet::new();
+    let semaphore = Arc::new(Semaphore::new(threads));
     for (_, cert) in subdomains {
         let res_ptr = resolver.clone();
         let client_ptr = client.clone();
+        let permit_limit = semaphore.clone();
         set.spawn(async move {
+            let _permit= permit_limit.acquire().await;
             let mut info = SubdomainInfo::default();
             info.domain = cert.name_value.clone();
             info.record_type = "NXDOMAIN".to_string();
@@ -102,6 +106,7 @@ pub async fn run_ctr_sh(target: &str, output: Option<String>) -> Result<()> {
 
     while let Some(res) = set.join_next().await {
         if let Ok(info) = res {
+            print!("=");
             domins.push(info);
         }
     }
@@ -165,9 +170,7 @@ mod crt_sh_date_format {
 }
 
 use tokio::{
-    fs::{File, create_dir_all},
-    io::AsyncWriteExt,
-    task::JoinSet,
+    fs::{File, create_dir_all}, io::AsyncWriteExt, sync::Semaphore, task::JoinSet
 };
 use tracing::warn;
 use trust_dns_resolver::{
