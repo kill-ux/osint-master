@@ -1,10 +1,11 @@
 pub mod dns;
 pub mod models;
 
-use std::path::Path;
+use std::{env, path::Path};
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use colored::Colorize;
+use dotenvy::dotenv;
 use reqwest::Client;
 
 use dns::*;
@@ -30,17 +31,27 @@ const SERVERS: &str = r#"
     "#;
 
 pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()> {
+    dotenv()?;
+    let api_key = env::var("ABUSEIPDB_API_KEY").context("API Key not found in .env")?;
+
     let ip = resolve_target(&target).await?.to_string();
     let ip_str = ip.as_str();
     println!("Searching IP: {}", ip_str);
+
     let mut report = fetch_data(ip_str).await?;
-    let text = fetch_whois(ip_str).await?;
-    let info = parse_whois(text);
+    let info = fetch_whois(ip_str).await?;
     report.additional_data = Some(info);
-    print_report(&report.query, &report.details);
+
+    if let Ok(abuse_data) = check_abuse_status(&ip, &api_key).await {
+        report.abuse_score = Some(abuse_data.abuse_confidence_score);
+        report.total_reports = Some(abuse_data.total_reports);
+    }
+
+    print_report(&report);
     if let Some(ref path) = output {
         save_report(path, &report).await?;
     }
+
     println!(
         "\n{}\n",
         " IP ANALYSIS COMPLETED ".on_magenta().black().bold()
@@ -48,16 +59,38 @@ pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()>
     Ok(())
 }
 
+pub async fn check_abuse_status(ip: &str, api_key: &str) -> Result<AbuseData> {
+    let client = reqwest::Client::new();
+    let url = format!("https://api.abuseipdb.com/api/v2/check?ipAddress={}", ip);
+
+    let res = client
+        .get(url)
+        .header("Key", api_key)
+        .header("Accept", "application/json")
+        .send()
+        .await?;
+
+    if !res.status().is_success() {
+        bail!("AbuseIPDB Error: {}", res.status());
+    }
+
+    let json: AbuseResponse = res.json().await?;
+    Ok(json.data)
+}
+
 pub async fn fetch_data(ip: &str) -> Result<IpReport> {
     fetch_data_with_retry(ip, 3).await
 }
 
-pub async fn fetch_whois(ip: &str) -> Result<String> {
+pub async fn fetch_whois(ip: &str) -> Result<WhoisInfo> {
     let whois = WhoIs::from_string(SERVERS)?;
     let options = WhoIsLookupOptions::from_string(ip)?;
     let text = whois.lookup(options)?;
-    println!("WHOIS text:\n{}", text);
-    Ok(text)
+
+    let info = parse_whois(text);
+
+    // println!("WHOIS text:\n{}", text);
+    Ok(info)
 }
 
 async fn fetch_data_with_retry(ip: &str, max_retries: u32) -> Result<IpReport> {
@@ -128,10 +161,10 @@ pub async fn save_report(path: &str, report: &models::IpReport) -> Result<()> {
     Ok(())
 }
 
-pub fn print_report(ip: &str, details: &Option<IpDetails>) {
-    if let Some(details) = details {
+pub fn print_report(report: &IpReport) {
+    if let Some(details) = &report.details {
         println!("{}", "─".repeat(60).bold());
-        println!("{} {}", "TARGET IP:".cyan().bold(), ip.bold());
+        println!("{} {}", "TARGET IP:".cyan().bold(), report.query.bold());
         println!("{}", "─".repeat(60).bold());
 
         // 1. Critical / risk‑related info first
@@ -178,5 +211,37 @@ pub fn print_report(ip: &str, details: &Option<IpDetails>) {
         );
 
         println!("{}", "─".repeat(60).bold());
+
+        let score = report.abuse_score.unwrap_or(0);
+        let risk_status = if score > 75 {
+            format!("HIGH RISK ({}%)", score).red().bold()
+        } else if score > 25 {
+            format!("MEDIUM RISK ({}%)", score).yellow()
+        } else {
+            format!("CLEAN ({}%)", score).green()
+        };
+
+        println!("{} {}", "ABUSE SCORE:".cyan().bold(), risk_status);
+        println!(
+            "{} {}",
+            "REPORTS:".cyan().bold(),
+            report.total_reports.unwrap_or(0)
+        );
+        println!("{}", "─".repeat(60).bold());
     }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct AbuseResponse {
+    pub data: AbuseData,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct AbuseData {
+    #[serde(rename = "abuseConfidenceScore")]
+    pub abuse_confidence_score: u32,
+    #[serde(rename = "totalReports")]
+    pub total_reports: u32,
+    pub domain: Option<String>,
+    pub usage_type: Option<String>,
 }
