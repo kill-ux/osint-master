@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 
 pub mod enumeration;
 pub use enumeration::*;
+pub mod takeover;
+pub use takeover::*;
 
 pub async fn run_domain_lookup(target: String, output: Option<String>, mut threads: usize) -> Result<()> {
     threads = threads.max(1);
