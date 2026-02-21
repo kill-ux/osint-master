@@ -8,8 +8,6 @@ use dns_lookup::lookup_host;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-pub mod enumeration;
-pub use enumeration::*;
 pub mod takeover;
 pub use takeover::*;
 

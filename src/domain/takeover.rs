@@ -1,14 +1,17 @@
-use anyhow::{Context, Result, bail};
-use chrono::{DateTime, Utc};
-use colored::*;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
     sync::Arc,
     time::Duration,
 };
+
+use anyhow::{Result, bail};
+use chrono::{DateTime, Utc};
+use colored::Colorize;
+use dns_lookup::lookup_host;
+use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
+use reqwest::{Client, header::AUTHORIZATION};
+use serde::{Deserialize, Serialize};
 use tokio::{
     fs::{File, create_dir_all},
     io::AsyncWriteExt,
@@ -16,1042 +19,614 @@ use tokio::{
     task::JoinSet,
     time::timeout,
 };
+use tracing::warn;
+use trust_dns_resolver::{
+    AsyncResolver, TokioAsyncResolver,
+    error::{ResolveError, ResolveErrorKind},
+    name_server::{GenericConnection, GenericConnectionProvider, TokioRuntime},
+    proto::rr::RecordType,
+};
+
+const VULNERABLE_PROVIDERS: &[(&str, &str, &str)] = &[
+    // Cloud Platforms
+    ("AWS S3", "s3.amazonaws.com", "NoSuchBucket"),
+    (
+        "AWS CloudFront",
+        "cloudfront.net",
+        "ERROR: The request could not be satisfied",
+    ),
+    ("Azure", "azurewebsites.net", "404 Site Not Found"),
+    ("Azure", "cloudapp.net", "404 Site Not Found"),
+    ("Azure", "trafficmanager.net", "404 Site Not Found"),
+    ("Google Cloud", "storage.googleapis.com", "NoSuchBucket"),
+    ("Digital Ocean", "digitaloceanspaces.com", "NoSuchBucket"),
+    ("Heroku", "herokuapp.com", "no such app"),
+    ("Heroku SSL", "herokussl.com", "no such app"),
+    (
+        "GitHub Pages",
+        "github.io",
+        "There isn't a GitHub Pages site here",
+    ),
+    ("Fastly", "fastly.net", "Fastly error: unknown domain"),
+    ("Netlify", "netlify.app", "Not Found - Request ID:"),
+    ("Vercel", "vercel.app", "404: NOT_FOUND"),
+    ("Firebase", "firebaseapp.com", "404. That's an error."),
+    ("Surge", "surge.sh", "project not found"),
+    // SaaS Platforms
+    ("WordPress.com", "wordpress.com", "Do you want to register"),
+    (
+        "Shopify",
+        "myshopify.com",
+        "Sorry, this shop is currently unavailable",
+    ),
+    ("Wix", "wixsite.com", "404 - Page Not Found"),
+    ("Squarespace", "squarespace.com", "404 - Page Not Found"),
+    ("Tumblr", "tumblr.com", "There's nothing here"),
+    (
+        "Ghost",
+        "ghost.io",
+        "The thing you were looking for is no longer here",
+    ),
+    ("Readme.io", "readme.io", "Project doesn't exist"),
+    // Marketing
+    (
+        "Unbounce",
+        "unbouncepages.com",
+        "The page you were looking for doesn't exist",
+    ),
+    (
+        "Campaign Monitor",
+        "createsend.com",
+        "The specified campaign does not exist",
+    ),
+    (
+        "GetResponse",
+        "getresponse.com",
+        "The page you are looking for does not exist",
+    ),
+    // Support
+    ("Zendesk", "zendesk.com", "Help Center Closed"),
+    (
+        "Freshdesk",
+        "freshdesk.com",
+        "The page you were looking for does not exist",
+    ),
+    (
+        "Help Scout",
+        "helpscoutdocs.com",
+        "We couldn't find the page you were looking for",
+    ),
+    // Development
+    (
+        "ReadTheDocs",
+        "readthedocs.io",
+        "The page you're looking for doesn't exist",
+    ),
+    ("Ngrok", "ngrok.io", "Tunnel *.ngrok.io not found"),
+    // Project Management
+    ("Trello", "trello.com", "Board not found"),
+    (
+        "Asana",
+        "asana.com",
+        "The page you were looking for doesn't exist",
+    ),
+    (
+        "Canny",
+        "canny.io",
+        "The page you were looking for does not exist",
+    ),
+    (
+        "Aha!",
+        "aha.io",
+        "The page you are looking for cannot be found",
+    ),
+];
+
+pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioRuntime>>;
 
 // ==================== DATA STRUCTURES ====================
 
 #[derive(Debug, Default, Serialize, Clone)]
-pub struct AssetInfo {
-    // Domain Info
+pub struct SubdomainInfo {
     pub domain: String,
-    pub asset_type: String, // "domain", "subdomain", "ip"
-
-    // Network Info
     pub ip: Option<String>,
-    pub ports: Vec<u16>,
-    pub services: Vec<ServiceInfo>,
-
-    // Certificate Info
-    pub certificate: Option<CertificateInfo>,
-
-    // Security Issues
-    pub vulnerabilities: Vec<String>,
-    pub takeover_risk: Option<TakeoverRisk>,
-
-    // Metadata
-    pub location: Option<Location>,
-    pub asn: Option<String>,
-}
-
-#[derive(Debug, Default, Serialize, Clone)]
-pub struct ServiceInfo {
-    pub port: u16,
-    pub service_name: String,
-    pub transport: String,
-    pub banner: Option<String>,
-    pub http_info: Option<HttpInfo>,
-}
-
-#[derive(Debug, Default, Serialize, Clone)]
-pub struct HttpInfo {
-    pub status_code: Option<u16>,
-    pub server: Option<String>,
-    pub title: Option<String>,
-    pub technologies: Vec<String>,
-    pub headers: HashMap<String, String>,
-}
-
-#[derive(Debug, Default, Serialize, Clone)]
-pub struct CertificateInfo {
-    pub fingerprint: String,
-    pub subject: String,
+    pub record_type: String,
     pub issuer: String,
-    pub not_before: String,
-    pub not_after: String,
-    pub signature_algorithm: String,
-    pub key_algorithm: String,
-    pub key_size: Option<i32>,
+    pub cert_id: u64,
+    pub expiry: String,
+    pub version: String,
     pub serial: String,
-    pub version: i32,
-    pub subject_alt_names: Vec<String>,
-    pub is_expired: bool,
-    pub expires_soon: bool,
-    pub is_trusted: bool,
-    pub validation_level: String, // DV, OV, EV
+    pub signature: String,
+    pub vulnerability: String,
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct TakeoverRisk {
-    pub risk_level: RiskLevel,
-    pub service_type: String,
-    pub cname_target: Option<String>,
-    pub reason: String,
-    pub remediation: String,
-}
+// ==================== SSLMATE API STRUCTS ====================
 
-#[derive(Debug, Serialize, Clone, PartialEq)]
-pub enum RiskLevel {
-    Critical,
-    High,
-    Medium,
-    Low,
-    None,
-}
-
-#[derive(Debug, Default, Serialize, Clone)]
-pub struct Location {
-    pub country: Option<String>,
-    pub city: Option<String>,
-    pub latitude: Option<f64>,
-    pub longitude: Option<f64>,
-}
-
-// ==================== CENSYS API STRUCTS ====================
-
-#[derive(Debug, Deserialize)]
-struct CensysSearchResponse<T> {
-    result: CensysResult<T>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CensysResult<T> {
-    hits: Vec<T>,
-    total: u64,
-}
-
-#[derive(Debug, Deserialize)]
-struct CensysCertificate {
-    #[serde(rename = "parsed")]
-    parsed: ParsedCertificate,
-    #[serde(rename = "metadata")]
-    metadata: CertificateMetadata,
-}
-
-#[derive(Debug, Deserialize)]
-struct ParsedCertificate {
-    #[serde(rename = "validity_period")]
-    validity: ValidityPeriod,
-    #[serde(rename = "issuer_dn")]
-    issuer: String,
-    #[serde(rename = "subject_dn")]
-    subject: String,
-    #[serde(rename = "fingerprint_sha256")]
-    fingerprint: String,
-    #[serde(rename = "signature_algorithm")]
-    signature_algorithm: SignatureAlgorithm,
-    #[serde(rename = "subject_key_info")]
-    subject_key_info: SubjectKeyInfo,
-    #[serde(rename = "extensions")]
-    extensions: Extensions,
-    #[serde(rename = "serial_number")]
-    serial_number: String,
-    version: i32,
-    #[serde(rename = "names")]
-    names: Option<Vec<String>>,
-    #[serde(rename = "validation_level")]
-    validation_level: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ValidityPeriod {
-    #[serde(rename = "not_before")]
+#[derive(Debug, Deserialize, Clone)]
+struct CertSpotterIssuance {
+    id: String,
+    dns_names: Option<Vec<String>>,
     not_before: String,
-    #[serde(rename = "not_after")]
     not_after: String,
+    issuer: Option<IssuerInfo>,
+    revoked: Option<bool>,
+    #[serde(default)]
+    revocation: Option<RevocationInfo>,
+    #[serde(default)]
+    pubkey: Option<PubKeyInfo>,
+    cert_der: Option<String>,
+    tbs_sha256: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct SignatureAlgorithm {
-    name: String,
-    oid: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct SubjectKeyInfo {
-    #[serde(rename = "key_algorithm")]
-    key_algorithm: KeyAlgorithm,
-    #[serde(rename = "rsa")]
-    rsa: Option<RsaInfo>,
-    #[serde(rename = "ec")]
-    ec: Option<EcInfo>,
-}
-
-#[derive(Debug, Deserialize)]
-struct KeyAlgorithm {
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct RsaInfo {
-    #[serde(rename = "modulus")]
-    modulus: String,
-    #[serde(rename = "length")]
-    length: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct EcInfo {
-    #[serde(rename = "curve")]
-    curve: String,
-    #[serde(rename = "length")]
-    length: i32,
-}
-
-#[derive(Debug, Deserialize)]
-struct Extensions {
-    #[serde(rename = "subject_alt_name")]
-    subject_alt_name: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CertificateMetadata {
-    #[serde(rename = "seen_in_scan")]
-    seen_in_scan: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CensysHost {
-    ip: String,
-    #[serde(rename = "location")]
-    location: Option<HostLocation>,
-    #[serde(rename = "autonomous_system")]
-    autonomous_system: Option<AutonomousSystem>,
-    services: Option<Vec<HostService>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct HostLocation {
-    country: Option<String>,
-    city: Option<String>,
-    coordinates: Option<HostCoordinates>,
-}
-
-#[derive(Debug, Deserialize)]
-struct HostCoordinates {
-    latitude: f64,
-    longitude: f64,
-}
-
-#[derive(Debug, Deserialize)]
-struct AutonomousSystem {
-    asn: Option<i32>,
+#[derive(Debug, Deserialize, Clone)]
+struct IssuerInfo {
+    friendly_name: String,
     name: Option<String>,
-    country_code: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct HostService {
-    port: u16,
-    service_name: String,
-    transport_protocol: String,
-    #[serde(rename = "http")]
-    http: Option<HostHttp>,
-    certificate: Option<String>,
-    banner: Option<String>,
+#[derive(Debug, Deserialize, Clone)]
+struct RevocationInfo {
+    #[serde(default, deserialize_with = "deserialize_reason")]
+    reason: Option<String>,
+    #[serde(default)]
+    time: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct HostHttp {
-    response: Option<HttpResponse>,
+#[derive(Debug, Deserialize, Clone)]
+struct PubKeyInfo {
+    #[serde(rename = "type")]
+    key_type: String,
+    bit_length: Option<i32>,
 }
 
-#[derive(Debug, Deserialize)]
-struct HttpResponse {
-    status_code: Option<u16>,
-    headers: Option<HashMap<String, String>>,
-    body: Option<String>,
-    title: Option<String>,
-    server: Option<String>,
-    #[serde(rename = "html_title")]
-    html_title: Option<String>,
+// Custom deserializer for revocation reason
+fn deserialize_reason<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Visitor;
+    use std::fmt;
+
+    struct ReasonVisitor;
+
+    impl<'de> Visitor<'de> for ReasonVisitor {
+        type Value = Option<String>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("null, integer, or string")
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E> {
+            Ok(None)
+        }
+
+        fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+            let reason = match value {
+                0 => "Unspecified".to_string(),
+                1 => "Key Compromise".to_string(),
+                2 => "CA Compromise".to_string(),
+                3 => "Affiliation Changed".to_string(),
+                4 => "Superseded".to_string(),
+                5 => "Cessation of Operation".to_string(),
+                6 => "Certificate Hold".to_string(),
+                8 => "Remove from CRL".to_string(),
+                9 => "Privilege Withdrawn".to_string(),
+                10 => "AA Compromise".to_string(),
+                _ => format!("Unknown reason code: {}", value),
+            };
+            Ok(Some(reason))
+        }
+
+        fn visit_u64<E: serde::de::Error>(self, value: u64) -> Result<Self::Value, E> {
+            self.visit_i64(value as i64)
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(Some(value.to_string()))
+        }
+
+        fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+            Ok(Some(value))
+        }
+    }
+
+    deserializer.deserialize_any(ReasonVisitor)
 }
 
-// ==================== CENSYS CLIENT ====================
+// ==================== SSLMATE CLIENT ====================
 
-struct CensysClient {
+pub struct SSLMateClient {
     client: Client,
-    token: String,
+    api_key: String,
 }
 
-impl CensysClient {
-    fn new(token: String) -> Self {
-        Self {
-            client: Client::builder()
-                .timeout(Duration::from_secs(30))
-                .build()
-                .unwrap(),
-            token,
-        }
+impl SSLMateClient {
+    pub fn new(api_key: String) -> Result<Self> {
+        let client = Client::builder().timeout(Duration::from_secs(15)).build()?;
+        Ok(Self { client, api_key })
     }
 
-    async fn search_certificates(
-        &self,
-        query: &str,
-        per_page: usize,
-    ) -> Result<Vec<CensysCertificate>> {
-        let url = "https://search.censys.io/api/v2/certificates/search";
+    async fn get_issuances(&self, domain: &str) -> Result<Vec<CertSpotterIssuance>> {
+        let encoded = percent_encode(domain.as_bytes(), NON_ALPHANUMERIC).to_string();
 
-        let response = self
-            .client
-            .post(url)
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Content-Type", "application/json")
-            .json(&serde_json::json!({
-                "q": query,
-                "per_page": per_page,
-                "sort": "parsed.validity.not_after:desc"
-            }))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error = response.text().await.unwrap_or_default();
-            bail!("Censys API error ({}): {}", status, error);
-        }
-
-        let data: CensysSearchResponse<CensysCertificate> = response.json().await?;
-        Ok(data.result.hits)
-    }
-
-    async fn search_hosts(&self, query: &str, per_page: usize) -> Result<Vec<CensysHost>> {
-        let url = "https://search.censys.io/api/v2/hosts/search";
-
-        let response = self
-            .client
-            .post(url)
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Content-Type", "application/json")
-            .json(&serde_json::json!({
-                "q": query,
-                "per_page": per_page,
-            }))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let error = response.text().await.unwrap_or_default();
-            bail!("Censys API error ({}): {}", status, error);
-        }
-
-        let data: CensysSearchResponse<CensysHost> = response.json().await?;
-        Ok(data.result.hits)
-    }
-
-    async fn get_host(&self, ip: &str) -> Result<CensysHost> {
-        let url = format!("https://search.censys.io/api/v2/hosts/{}", ip);
-
-        let response = self
-            .client
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", self.token))
-            .send()
-            .await?;
-
-        if !response.status().is_success() {
-            bail!("Censys API error: {}", response.status());
-        }
-
-        #[derive(Debug, Deserialize)]
-        struct HostResponse {
-            result: CensysHost,
-        }
-
-        let data: HostResponse = response.json().await?;
-        Ok(data.result)
-    }
-
-    pub async fn get_certificate_by_fingerprint(&self, fingerprint: &str) -> Result<CensysCertificate> {
         let url = format!(
-            "https://search.censys.io/api/v2/certificates/{}",
-            fingerprint
+            "https://api.certspotter.com/v1/issuances?domain={}&include_subdomains=true&expand=dns_names&expand=issuer&expand=pubkey&expand=revocation",
+            encoded
         );
 
         let response = self
             .client
             .get(&url)
-            .header("Authorization", format!("Bearer {}", self.token))
-            .header("Content-Type", "application/json")
+            .header(AUTHORIZATION, format!("Bearer {}", self.api_key))
             .send()
             .await?;
 
         if !response.status().is_success() {
             let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            bail!("Censys API error ({}): {}", status, error_text);
+            let text = response.text().await.unwrap_or_default();
+            bail!("SSLMate API error ({}): {}", status, text);
         }
 
-        #[derive(Debug, Deserialize)]
-        struct CertificateResponse {
-            result: CensysCertificate,
-        }
-
-        let data: CertificateResponse = response.json().await?;
-        Ok(data.result)
+        let issuances: Vec<CertSpotterIssuance> = response.json().await?;
+        Ok(issuances)
     }
 }
 
-// ==================== TAKEOVER SIGNATURES ====================
+// ==================== DNS RESOLVER ====================
 
-struct TakeoverSignature {
-    service: &'static str,
-    cname_patterns: &'static [&'static str],
-    fingerprint: &'static str,
-    risk: RiskLevel,
-    remediation: &'static str,
+pub async fn resolve_domain(domain: &str) -> Result<Vec<String>> {
+    match timeout(
+        Duration::from_secs(3),
+        tokio::task::spawn_blocking({
+            let domain = domain.to_string();
+            move || lookup_host(&domain)
+        }),
+    )
+    .await
+    {
+        Ok(Ok(Ok(ips))) => Ok(ips.map(|ip| ip.to_string()).collect()),
+        _ => Ok(vec![]),
+    }
 }
 
-const TAKEOVER_SIGNATURES: &[TakeoverSignature] = &[
-    TakeoverSignature {
-        service: "GitHub Pages",
-        cname_patterns: &["github.io"],
-        fingerprint: "There isn't a GitHub Pages site here",
-        risk: RiskLevel::Critical,
-        remediation: "Remove CNAME record or create the GitHub Pages site",
-    },
-    TakeoverSignature {
-        service: "Heroku",
-        cname_patterns: &["herokuapp.com", "herokussl.com"],
-        fingerprint: "no such app",
-        risk: RiskLevel::Critical,
-        remediation: "Remove CNAME record or recreate the Heroku app",
-    },
-    TakeoverSignature {
-        service: "AWS S3",
-        cname_patterns: &["s3.amazonaws.com", "s3-website"],
-        fingerprint: "NoSuchBucket",
-        risk: RiskLevel::Critical,
-        remediation: "Remove CNAME record or recreate the S3 bucket",
-    },
-    TakeoverSignature {
-        service: "Azure",
-        cname_patterns: &["azurewebsites.net", "cloudapp.net", "trafficmanager.net"],
-        fingerprint: "404 Site Not Found",
-        risk: RiskLevel::Critical,
-        remediation: "Remove CNAME record or recreate the Azure resource",
-    },
-    TakeoverSignature {
-        service: "CloudFront",
-        cname_patterns: &["cloudfront.net"],
-        fingerprint: "ERROR: The request could not be satisfied",
-        risk: RiskLevel::Critical,
-        remediation: "Remove CNAME record or reconfigure CloudFront distribution",
-    },
-    TakeoverSignature {
-        service: "Fastly",
-        cname_patterns: &["fastly.net"],
-        fingerprint: "Fastly error: unknown domain",
-        risk: RiskLevel::Critical,
-        remediation: "Remove CNAME record or reconfigure Fastly service",
-    },
-    TakeoverSignature {
-        service: "WordPress.com",
-        cname_patterns: &["wordpress.com"],
-        fingerprint: "Do you want to register",
-        risk: RiskLevel::High,
-        remediation: "Remove CNAME record or recreate the WordPress.com site",
-    },
-    TakeoverSignature {
-        service: "Shopify",
-        cname_patterns: &["myshopify.com"],
-        fingerprint: "Sorry, this shop is currently unavailable",
-        risk: RiskLevel::High,
-        remediation: "Remove CNAME record or recreate the Shopify store",
-    },
-    TakeoverSignature {
-        service: "Surge.sh",
-        cname_patterns: &["surge.sh"],
-        fingerprint: "project not found",
-        risk: RiskLevel::High,
-        remediation: "Remove CNAME record or redeploy to Surge",
-    },
-    TakeoverSignature {
-        service: "Unbounce",
-        cname_patterns: &["unbouncepages.com"],
-        fingerprint: "The page you were looking for doesn't exist",
-        risk: RiskLevel::Medium,
-        remediation: "Remove CNAME record or recreate the Unbounce page",
-    },
-    TakeoverSignature {
-        service: "Tumblr",
-        cname_patterns: &["tumblr.com"],
-        fingerprint: "There's nothing here",
-        risk: RiskLevel::Medium,
-        remediation: "Remove CNAME record or recreate the Tumblr blog",
-    },
-    TakeoverSignature {
-        service: "Ghost",
-        cname_patterns: &["ghost.io"],
-        fingerprint: "The thing you were looking for is no longer here",
-        risk: RiskLevel::Medium,
-        remediation: "Remove CNAME record or recreate the Ghost blog",
-    },
-    TakeoverSignature {
-        service: "Pantheon",
-        cname_patterns: &["pantheonsite.io"],
-        fingerprint: "404 error unknown site",
-        risk: RiskLevel::Medium,
-        remediation: "Remove CNAME record or reconfigure Pantheon site",
-    },
-    TakeoverSignature {
-        service: "Readme.io",
-        cname_patterns: &["readme.io"],
-        fingerprint: "Project doesn't exist",
-        risk: RiskLevel::Low,
-        remediation: "Remove CNAME record or recreate the ReadMe project",
-    },
-];
+// ==================== TAKEOVER CHECK ====================
 
-// ==================== MAIN SCANNER ====================
-
-pub struct SubdomainScanner {
-    censys: Arc<CensysClient>,
-    target: String,
-    discovered: Arc<tokio::sync::Mutex<HashSet<String>>>,
-    results: Arc<tokio::sync::Mutex<Vec<AssetInfo>>>,
-}
-
-impl SubdomainScanner {
-    pub fn new(token: String, target: String) -> Self {
-        Self {
-            censys: Arc::new(CensysClient::new(token)),
-            target,
-            discovered: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
-            results: Arc::new(tokio::sync::Mutex::new(Vec::new())),
-        }
-    }
-
-    pub async fn enumerate(&self, threads: usize) -> Result<Vec<AssetInfo>> {
-        println!(
-            "\n{}",
-            "🔍 PHASE 1: Certificate Discovery".bright_blue().bold()
-        );
-        self.discover_from_certificates().await?;
-
-        println!("\n{}", "🔍 PHASE 2: Host Discovery".bright_blue().bold());
-        self.discover_from_hosts().await?;
-
-        println!("\n{}", "🔬 PHASE 3: Deep Analysis".bright_blue().bold());
-        self.analyze_all(threads).await?;
-
-        let results = self.results.lock().await.clone();
-        Ok(results)
-    }
-
-    async fn discover_from_certificates(&self) -> Result<()> {
-        // Search for all certificates related to the target domain
-        let query = format!("names: {} and tags: trusted", self.target);
-        println!("  Query: {}", query.dimmed());
-
-        let certs = self.censys.search_certificates(&query, 100).await?;
-        println!("  Found {} trusted certificates", certs.len());
-
-        for cert in certs {
-            // Extract all names from certificate
-            let mut names = Vec::new();
-
-            if let Some(san) = &cert.parsed.extensions.subject_alt_name {
-                names.extend(san.clone());
+pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
+    match resolve_cname(info, resolver).await {
+        Ok(cname) => {
+            info.record_type = "CNAME".to_string();
+            for (service, pattern, _fingerprint) in VULNERABLE_PROVIDERS {
+                if cname.contains(pattern) && info.ip.is_none() {
+                    add_vuln(info, &format!("CRITICAL: Dangling CNAME to {}", service));
+                    break;
+                }
             }
-            if let Some(cert_names) = &cert.parsed.names {
-                names.extend(cert_names.clone());
+        }
+        Err(dns_err) => {
+            if let Some(err) = dns_err.downcast_ref::<ResolveError>()
+                && matches!(err.kind(), ResolveErrorKind::NoRecordsFound { .. })
+            {
+                info.record_type = "DNS_MISSING".to_string();
+                add_vuln(
+                    info,
+                    "Potential Takeover: Domain exists in logs but has no DNS records",
+                );
+            } else {
+                warn!("DNS error: {}", dns_err);
             }
+        }
+    }
+}
 
-            for name in names {
-                if name.ends_with(&self.target) && name != self.target {
-                    let clean_name = name.trim_end_matches('.').to_string();
-                    if !clean_name.contains('*') {
-                        // Skip wildcards
-                        self.discovered.lock().await.insert(clean_name);
+pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<String> {
+    let lookup = resolver.lookup(&info.domain, RecordType::CNAME).await?;
+    for record in lookup.iter() {
+        if let Some(cname) = record.as_cname() {
+            return Ok(cname.to_string().trim_end_matches('.').to_string());
+        }
+    }
+    bail!("Error: Can't resolve cname".to_string());
+}
+
+// ==================== HELPER FUNCTIONS ====================
+
+fn add_vuln(info: &mut SubdomainInfo, msg: &str) {
+    if info.vulnerability.is_empty() {
+        info.vulnerability = msg.to_string();
+    } else {
+        info.vulnerability.push_str(&format!(" | {}", msg));
+    }
+}
+
+// ==================== MAIN ENUMERATION FUNCTION ====================
+
+pub async fn enumerate_subdomains(
+    domain: &str,
+    sslmate_key: &str,
+    threads: usize,
+) -> Result<Vec<SubdomainInfo>> {
+    println!("Searching Domain: {}", domain);
+    println!(
+        "\n{}{}",
+        " Main Domain: ".on_magenta().black().bold(),
+        domain.on_bright_blue().black().bold()
+    );
+    println!("{}", "─".repeat(60).bold());
+
+    // Initialize client
+    let sslmate = SSLMateClient::new(sslmate_key.to_string())?;
+
+    // Get all issuances
+    let issuances = sslmate.get_issuances(domain).await?;
+
+    // Build a map of domain to certificate info
+    let mut domain_to_certs: HashMap<String, Vec<CertSpotterIssuance>> = HashMap::new();
+    let mut all_subdomains = HashSet::new();
+
+    for issuance in &issuances {
+        if let Some(dns_names) = &issuance.dns_names {
+            for name in dns_names {
+                let clean_name = name.trim_start_matches("*.").to_string();
+                if clean_name.ends_with(domain) {
+                    domain_to_certs
+                        .entry(clean_name.clone())
+                        .or_insert_with(Vec::new)
+                        .push(issuance.clone());
+
+                    if clean_name != domain {
+                        all_subdomains.insert(clean_name);
                     }
                 }
             }
         }
-
-        let count = self.discovered.lock().await.len();
-        println!("  ✅ Discovered {} unique subdomains", count);
-        Ok(())
     }
 
-    async fn discover_from_hosts(&self) -> Result<()> {
-        // Search for hosts with this domain in their services
-        let query = format!("services.tls.certificate.parsed.names: {}", self.target);
-        println!("  Query: {}", query.dimmed());
+    // Add the main domain
+    all_subdomains.insert(domain.to_string());
 
-        let hosts = self.censys.search_hosts(&query, 100).await?;
-        println!("  Found {} hosts", hosts.len());
+    // Resolve each subdomain with concurrency control
+    println!("\nResolving subdomains...");
+    let resolver = Arc::new(TokioAsyncResolver::tokio_from_system_conf()?);
+    let mut domain_to_ips: HashMap<String, Vec<String>> = HashMap::new();
+    let mut set = JoinSet::new();
+    let semaphore = Arc::new(Semaphore::new(threads));
 
-        for host in hosts {
-            if let Some(services) = host.services {
-                for service in services {
-                    if let Some(cert_fp) = service.certificate {
-                        // Get certificate details to extract names
-                        if let Ok(cert) = self.censys.get_certificate_by_fingerprint(&cert_fp).await
-                        {
-                            if let Some(names) = cert.parsed.names {
-                                for name in names {
-                                    if name.ends_with(&self.target) && name != self.target {
-                                        self.discovered.lock().await.insert(name);
-                                    }
-                                }
-                            }
-                        }
-                    }
+    for subdomain in all_subdomains.clone() {
+        let resolver = resolver.clone();
+        let permit = semaphore.clone();
+
+        set.spawn(async move {
+            let _permit = permit.acquire().await;
+            let ips = resolve_domain(&subdomain).await.unwrap_or_default();
+            (subdomain, ips)
+        });
+    }
+
+    while let Some(res) = set.join_next().await {
+        if let Ok((subdomain, ips)) = res {
+            if !ips.is_empty() {
+                domain_to_ips.insert(subdomain, ips);
+            }
+            print!(".");
+        }
+    }
+    println!();
+
+    // Build results
+    let mut results = Vec::new();
+
+    for subdomain in all_subdomains {
+        let certs = domain_to_certs.get(&subdomain).cloned().unwrap_or_default();
+        let ips = domain_to_ips.get(&subdomain).cloned().unwrap_or_default();
+
+        // Find the latest cert for this domain
+        let latest_cert = certs.into_iter().max_by(|a, b| {
+            let a_date = DateTime::parse_from_rfc3339(&a.not_after).unwrap_or_default();
+            let b_date = DateTime::parse_from_rfc3339(&b.not_after).unwrap_or_default();
+            a_date.cmp(&b_date)
+        });
+
+        if let Some(cert) = latest_cert {
+            // Parse expiry
+            let expiry = DateTime::parse_from_rfc3339(&cert.not_after).unwrap_or_default();
+            let now = Utc::now();
+            let expiry_rfc2822 = expiry.to_rfc2822();
+
+            // Determine record type and vulnerabilities
+            let (record_type, mut vulnerability) = if ips.is_empty() {
+                (
+                    "DNS_MISSING".to_string(),
+                    "Potential Takeover: Domain exists in logs but has no DNS records".to_string(),
+                )
+            } else {
+                ("A".to_string(), String::new())
+            };
+
+            // Add expiry vulnerability
+            if expiry < now {
+                if !vulnerability.is_empty() {
+                    vulnerability += " | EXPIRED_CERTIFICATE";
+                } else {
+                    vulnerability = "EXPIRED_CERTIFICATE".to_string();
                 }
             }
-        }
 
-        let count = self.discovered.lock().await.len();
-        println!("  ✅ Total unique subdomains: {}", count);
-        Ok(())
-    }
+            // Extract certificate details
+            let serial = cert.tbs_sha256.unwrap_or_else(|| "Unknown".to_string());
+            let cert_id = cert.id.parse::<u64>().unwrap_or(0);
 
-    async fn analyze_all(&self, threads: usize) -> Result<()> {
-        let subdomains: Vec<String> = self.discovered.lock().await.iter().cloned().collect();
-        println!(
-            "  Analyzing {} subdomains with {} threads",
-            subdomains.len(),
-            threads
-        );
+            let issuer = cert
+                .issuer
+                .as_ref()
+                .map(|i| i.name.clone().unwrap_or_else(|| i.friendly_name.clone()))
+                .unwrap_or_else(|| "Unknown".to_string());
 
-        let semaphore = Arc::new(Semaphore::new(threads));
-        let mut set = JoinSet::new();
+            let signature = if let Some(pubkey) = &cert.pubkey {
+                if pubkey.key_type == "ecdsa" {
+                    format!("ecdsa (P-256)") // or extract actual curve from cert
+                } else {
+                    format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
+                }
+            } else {
+                "Unknown".to_string()
+            };
 
-        for subdomain in subdomains {
-            let sem = semaphore.clone();
-            let censys = self.censys.clone();
-            let target = self.target.clone();
-            let results = self.results.clone();
+            // Check for weak signature
+            if signature.contains("sha1") || signature.contains("SHA1") {
+                if !vulnerability.is_empty() {
+                    vulnerability += " | WEAK_SIGNATURE_SHA1";
+                } else {
+                    vulnerability = "WEAK_SIGNATURE_SHA1".to_string();
+                }
+            }
 
-            set.spawn(async move {
-                let _permit = sem.acquire().await.unwrap();
-                let asset = analyze_subdomain(&subdomain, &target, &censys).await;
-                results.lock().await.push(asset);
-                print!("{}", ".".green());
-            });
-        }
-
-        while set.join_next().await.is_some() {}
-        println!();
-        Ok(())
-    }
-}
-
-async fn analyze_subdomain(subdomain: &str, target: &str, censys: &CensysClient) -> AssetInfo {
-    let mut asset = AssetInfo {
-        domain: subdomain.to_string(),
-        asset_type: "subdomain".to_string(),
-        ..Default::default()
-    };
-
-    // Get certificate info
-    if let Ok(cert_info) = get_certificate_info(subdomain, censys).await {
-        asset.certificate = Some(cert_info);
-    }
-
-    // Get host/IP info
-    if let Ok(hosts) = get_host_info(subdomain, censys).await {
-        if let Some(host) = hosts.first() {
-            asset.ip = Some(host.ip.clone());
-
-            if let Some(loc) = &host.location {
-                asset.location = Some(Location {
-                    country: loc.country.clone(),
-                    city: loc.city.clone(),
-                    latitude: loc.coordinates.as_ref().map(|c| c.latitude),
-                    longitude: loc.coordinates.as_ref().map(|c| c.longitude),
+            // Create entries
+            if !ips.is_empty() {
+                for ip in ips {
+                    results.push(SubdomainInfo {
+                        domain: subdomain.clone(),
+                        ip: Some(ip),
+                        record_type: record_type.clone(),
+                        issuer: issuer.clone(),
+                        cert_id,
+                        expiry: expiry_rfc2822.clone(),
+                        version: "V3".to_string(),
+                        serial: serial.clone(),
+                        signature: signature.clone(),
+                        vulnerability: vulnerability.clone(),
+                    });
+                }
+            } else {
+                results.push(SubdomainInfo {
+                    domain: subdomain.clone(),
+                    ip: None,
+                    record_type,
+                    issuer,
+                    cert_id,
+                    expiry: expiry_rfc2822,
+                    version: "V3".to_string(),
+                    serial,
+                    signature,
+                    vulnerability,
                 });
             }
-
-            if let Some(as_info) = &host.autonomous_system {
-                asset.asn = as_info.asn.map(|n| format!("AS{}", n));
-            }
-
-            if let Some(services) = &host.services {
-                for service in services {
-                    let mut service_info = ServiceInfo {
-                        port: service.port,
-                        service_name: service.service_name.clone(),
-                        transport: service.transport_protocol.clone(),
-                        banner: service.banner.clone(),
-                        ..Default::default()
-                    };
-
-                    if let Some(http) = &service.http {
-                        if let Some(resp) = &http.response {
-                            let mut http_info = HttpInfo {
-                                status_code: resp.status_code,
-                                server: resp.server.clone(),
-                                title: resp.html_title.clone().or(resp.title.clone()),
-                                headers: resp.headers.clone().unwrap_or_default(),
-                                ..Default::default()
-                            };
-
-                            // Detect technologies
-                            if let Some(body) = &resp.body {
-                                http_info.technologies =
-                                    detect_technologies(&http_info.headers, body);
-                            }
-
-                            service_info.http_info = Some(http_info);
-                        }
-                    }
-
-                    asset.ports.push(service.port);
-                    asset.services.push(service_info);
-                }
-            }
         }
     }
 
-    // Check for takeover risks
-    asset.takeover_risk = check_takeover_risk(subdomain, &asset).await;
+    // Sort results
+    results.sort_by(|a, b| a.domain.cmp(&b.domain));
 
-    // Collect all vulnerabilities
-    asset.vulnerabilities = collect_vulnerabilities(&asset);
-
-    asset
+    Ok(results)
 }
 
-async fn get_certificate_info(domain: &str, censys: &CensysClient) -> Result<CertificateInfo> {
-    let query = format!("names: {}", domain);
-    let certs = censys.search_certificates(&query, 1).await?;
+// ==================== REPORT GENERATION ====================
 
-    if let Some(cert) = certs.first() {
-        let not_after = DateTime::parse_from_rfc3339(&cert.parsed.validity.not_after).unwrap();
-        let now = Utc::now();
-
-        // Determine key size
-        let key_size = if let Some(rsa) = &cert.parsed.subject_key_info.rsa {
-            Some(rsa.length)
-        } else if let Some(ec) = &cert.parsed.subject_key_info.ec {
-            Some(ec.length)
-        } else {
-            None
-        };
-
-        // Determine validation level
-        let validation_level = match cert.parsed.validation_level.as_deref() {
-            Some("DV") => "DV".to_string(),
-            Some("OV") => "OV".to_string(),
-            Some("EV") => "EV".to_string(),
-            _ => "Unknown".to_string(),
-        };
-
-        Ok(CertificateInfo {
-            fingerprint: cert.parsed.fingerprint.clone(),
-            subject: cert.parsed.subject.clone(),
-            issuer: cert.parsed.issuer.clone(),
-            not_before: cert.parsed.validity.not_before.clone(),
-            not_after: cert.parsed.validity.not_after.clone(),
-            signature_algorithm: cert.parsed.signature_algorithm.name.clone(),
-            key_algorithm: cert.parsed.subject_key_info.key_algorithm.name.clone(),
-            key_size,
-            serial: cert.parsed.serial_number.clone(),
-            version: cert.parsed.version,
-            subject_alt_names: cert
-                .parsed
-                .extensions
-                .subject_alt_name
-                .clone()
-                .unwrap_or_default(),
-            is_expired: not_after < now,
-            expires_soon: !(not_after < now) && not_after < now + chrono::Duration::days(30),
-            is_trusted: true, // We filtered by trusted
-            validation_level,
-        })
-    } else {
-        bail!("No certificate found")
-    }
-}
-
-async fn get_host_info(domain: &str, censys: &CensysClient) -> Result<Vec<CensysHost>> {
-    let query = format!("services.tls.certificate.parsed.names: {}", domain);
-    let hosts = censys.search_hosts(&query, 10).await?;
-    Ok(hosts)
-}
-
-fn detect_technologies(headers: &HashMap<String, String>, body: &str) -> Vec<String> {
-    let mut tech = Vec::new();
-    let body_lower = body.to_lowercase();
-
-    // Server header
-    if let Some(server) = headers.get("server") {
-        tech.push(format!("Server: {}", server));
-    }
-
-    // X-Powered-By
-    if let Some(powered) = headers.get("x-powered-by") {
-        tech.push(format!("X-Powered-By: {}", powered));
-    }
-
-    // Common CMS and frameworks
-    if body_lower.contains("wp-content") || body_lower.contains("wp-includes") {
-        tech.push("WordPress".to_string());
-    }
-    if body_lower.contains("drupal") {
-        tech.push("Drupal".to_string());
-    }
-    if body_lower.contains("joomla") {
-        tech.push("Joomla".to_string());
-    }
-    if body_lower.contains("laravel") || headers.contains_key("x-laravel") {
-        tech.push("Laravel".to_string());
-    }
-    if body_lower.contains("csrf-token") || headers.contains_key("x-django") {
-        tech.push("Django".to_string());
-    }
-    if headers.contains_key("x-rails") {
-        tech.push("Ruby on Rails".to_string());
-    }
-    if body_lower.contains("react") || body_lower.contains("reactjs") {
-        tech.push("React".to_string());
-    }
-    if body_lower.contains("angular") {
-        tech.push("Angular".to_string());
-    }
-    if body_lower.contains("vue") {
-        tech.push("Vue.js".to_string());
-    }
-    if body_lower.contains("jquery") {
-        tech.push("jQuery".to_string());
-    }
-    if body_lower.contains("bootstrap") {
-        tech.push("Bootstrap".to_string());
-    }
-
-    tech
-}
-
-async fn check_takeover_risk(domain: &str, asset: &AssetInfo) -> Option<TakeoverRisk> {
-    // Check if domain has CNAME but no A/AAAA records
-    // This is simplified - in reality you'd need to do DNS lookups
-
-    // For now, check if the domain points to a known vulnerable service
-    for sig in TAKEOVER_SIGNATURES {
-        // Check if any service matches the pattern
-        for service in &asset.services {
-            if let Some(http) = &service.http_info {
-                if let Some(title) = &http.title {
-                    if title.contains(sig.fingerprint) {
-                        return Some(TakeoverRisk {
-                            risk_level: sig.risk.clone(),
-                            service_type: sig.service.to_string(),
-                            cname_target: Some(service.service_name.clone()),
-                            reason: format!(
-                                "Service returns '{}' indicating possible takeover",
-                                sig.fingerprint
-                            ),
-                            remediation: sig.remediation.to_string(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-fn collect_vulnerabilities(asset: &AssetInfo) -> Vec<String> {
-    let mut vulns = Vec::new();
-
-    // Certificate issues
-    if let Some(cert) = &asset.certificate {
-        if cert.is_expired {
-            vulns.push("EXPIRED_CERTIFICATE".to_string());
-        }
-        if cert.expires_soon {
-            vulns.push("CERTIFICATE_EXPIRING_SOON".to_string());
-        }
-        if cert.signature_algorithm.to_lowercase().contains("sha1") {
-            vulns.push("WEAK_SIGNATURE_SHA1".to_string());
-        }
-        if cert.key_algorithm.to_lowercase().contains("rsa") && cert.key_size.unwrap_or(0) < 2048 {
-            vulns.push(format!("WEAK_KEY_SIZE_{}", cert.key_size.unwrap_or(0)));
-        }
-    }
-
-    // Open ports
-    if asset.ports.contains(&21) {
-        vulns.push("FTP_PORT_OPEN".to_string());
-    }
-    if asset.ports.contains(&23) {
-        vulns.push("TELNET_PORT_OPEN".to_string());
-    }
-    if asset.ports.contains(&445) {
-        vulns.push("SMB_PORT_OPEN".to_string());
-    }
-    if asset.ports.contains(&3389) {
-        vulns.push("RDP_PORT_OPEN".to_string());
-    }
-
-    // HTTP issues
-    for service in &asset.services {
-        if let Some(http) = &service.http_info {
-            if let Some(code) = http.status_code {
-                if code >= 500 {
-                    vulns.push(format!("HTTP_{}_SERVER_ERROR", code));
-                }
-                if code == 401 || code == 403 {
-                    vulns.push(format!("HTTP_{}_ACCESS_CONTROL", code));
-                }
-            }
-
-            if let Some(server) = &http.server {
-                if server.contains("Apache/2.2") || server.contains("IIS/6") {
-                    vulns.push(format!("OUTDATED_SERVER_{}", server));
-                }
-            }
-        }
-    }
-
-    vulns
-}
-
-// ==================== OUTPUT FUNCTIONS ====================
-
-fn print_summary(results: &[AssetInfo]) {
-    println!("\n{}", "📊 FINAL REPORT".bright_blue().bold());
-    println!("{}", "═".repeat(100).bright_blue());
-
-    // Statistics
-    let total = results.len();
-    let with_ip = results.iter().filter(|a| a.ip.is_some()).count();
-    let with_cert = results.iter().filter(|a| a.certificate.is_some()).count();
-    let vulnerable = results
-        .iter()
-        .filter(|a| !a.vulnerabilities.is_empty())
-        .count();
-    let takeover_risks = results.iter().filter(|a| a.takeover_risk.is_some()).count();
-
-    println!("\n{}", "📈 Statistics".bright_white().bold());
-    println!("  Total Subdomains: {}", total);
+pub fn print_report(results: &[SubdomainInfo]) {
     println!(
-        "  Resolved to IP: {} ({:.1}%)",
-        with_ip,
-        (with_ip as f64 / total as f64 * 100.0)
+        "\n{} {}",
+        "✔".green().bold(),
+        format!("Subdomains found: {}", results.len()).bold()
     );
-    println!(
-        "  Has Certificate: {} ({:.1}%)",
-        with_cert,
-        (with_cert as f64 / total as f64 * 100.0)
-    );
-    println!("  Has Vulnerabilities: {}", vulnerable);
-    println!("  Takeover Risks: {}", takeover_risks);
 
-    // Takeover risks (most critical)
-    let critical: Vec<_> = results.iter()
-        .filter(|a| matches!(a.takeover_risk, Some(ref t) if matches!(t.risk_level, RiskLevel::Critical)))
-        .collect();
+    let mut vulnerabilities = Vec::new();
 
-    if !critical.is_empty() {
-        println!("\n{}", "🔥 CRITICAL TAKEOVER RISKS".on_red().black().bold());
-        for asset in critical {
-            if let Some(risk) = &asset.takeover_risk {
-                println!("  • {}", asset.domain.bright_white().bold());
-                println!("    Service: {}", risk.service_type.yellow());
-                println!("    Risk: {:?}", risk.risk_level);
-                println!("    Remediation: {}", risk.remediation.dimmed());
-            }
-        }
-    }
-
-    // All assets with details
-    println!("\n{}", "📋 DETAILED ASSET LIST".bright_white().bold());
-    for asset in results {
-        let status = if asset.ip.is_some() {
+    for info in results {
+        let status_icon = if info.ip.is_some() {
             "●".green()
         } else {
             "○".red()
         };
-        println!("\n  {} {}", status, asset.domain.bright_white().bold());
 
-        if let Some(ip) = &asset.ip {
-            println!("    IP: {}", ip.dimmed());
+        println!(
+            "  {} {} ({})",
+            status_icon,
+            info.domain.bright_white().bold(),
+            info.ip.as_deref().unwrap_or("No IP").dimmed()
+        );
 
-            if !asset.ports.is_empty() {
-                println!(
-                    "    Ports: {}",
-                    asset
-                        .ports
-                        .iter()
-                        .map(|p| p.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                        .cyan()
-                );
-            }
-
-            if let Some(cert) = &asset.certificate {
-                let expiry = if cert.is_expired {
-                    format!(" (EXPIRED)").red()
-                } else if cert.expires_soon {
-                    format!(" (EXPIRES SOON)").yellow()
-                } else {
-                    "".normal()
-                };
-                println!(
-                    "    Certificate: {} until{}{}",
-                    cert.issuer.dimmed(),
-                    cert.not_after[0..10].dimmed(),
-                    expiry
-                );
-            }
-
-            for service in &asset.services {
-                if let Some(http) = &service.http_info {
-                    if let Some(code) = http.status_code {
-                        let code_str = if code == 200 {
-                            code.to_string().green()
-                        } else if code < 400 {
-                            code.to_string().yellow()
-                        } else {
-                            code.to_string().red()
-                        };
-                        println!("    HTTP:{} {}", service.port, code_str);
-
-                        if let Some(title) = &http.title {
-                            if title.len() > 50 {
-                                println!("      Title: {}...", &title[..47].dimmed());
-                            } else {
-                                println!("      Title: {}", title.dimmed());
-                            }
-                        }
-
-                        if !http.technologies.is_empty() {
-                            println!("      Tech: {}", http.technologies.join(", ").dimmed());
-                        }
-                    }
-                }
+        if !info.expiry.is_empty() {
+            if info.vulnerability.contains("EXPIRED") {
+                println!("    {} {}", "▓ SSL:".yellow(), info.expiry.red());
+            } else {
+                println!("    {} {}", "▓ SSL:".cyan(), info.expiry.dimmed());
             }
         }
 
-        if !asset.vulnerabilities.is_empty() {
-            println!(
-                "    {} Vulnerabilities: {}",
-                "⚠".yellow(),
-                asset.vulnerabilities.join(", ").yellow()
-            );
+        if !info.vulnerability.is_empty() {
+            vulnerabilities.push(info.clone());
+        }
+    }
+
+    if !vulnerabilities.is_empty() {
+        println!(
+            "\n{}",
+            "❗ Potential Vulnerabilities & Risks:"
+                .on_red()
+                .black()
+                .bold()
+        );
+        for vuln in vulnerabilities {
+            println!("  → {}", vuln.domain.bright_white());
+            println!("    {}", vuln.vulnerability.yellow().italic());
         }
     }
 }
 
-async fn save_json_report(path: &str, results: &[AssetInfo]) -> Result<()> {
-    let report = serde_json::to_string_pretty(results)?;
+pub async fn save_report(path: &str, results: &[SubdomainInfo]) -> Result<()> {
+    let res = if path.ends_with("json") {
+        serde_json::to_string_pretty(results)?
+    } else {
+        // Simple text format as fallback
+        results
+            .iter()
+            .map(|r| format!("{}: {}", r.domain, r.ip.as_deref().unwrap_or("No IP")))
+            .collect::<Vec<String>>()
+            .join("\n")
+    };
 
     let path = Path::new(path);
-    if let Some(parent) = path.parent() {
+    if let Some(parent) = path.parent()
+        && parent.to_str() != Some("")
+    {
         create_dir_all(parent).await?;
     }
 
-    let mut file = File::create(path).await?;
-    file.write_all(report.as_bytes()).await?;
-
+    let mut fd = File::create(path).await?;
+    fd.write_all(res.as_bytes()).await?;
     println!(
-        "\n{} JSON report saved to: {}",
-        "✓".green().bold(),
-        path.to_string_lossy().bright_cyan()
+        "{} {}",
+        "Data successfully saved to:".green(),
+        path.to_string_lossy()
     );
+    Ok(())
+}
+
+// ==================== MAIN FUNCTION ====================
+
+pub async fn run_domain_lookup_sslmate(
+    target: String,
+    output: Option<String>,
+    threads: usize,
+) -> Result<()> {
+    dotenvy::dotenv().ok();
+
+    let sslmate_key =
+        std::env::var("SSLMATE_API_KEY").expect("SSLMATE_API_KEY not found in .env file");
+
+    let results = enumerate_subdomains(&target, &sslmate_key, threads).await?;
+
+    print_report(&results);
+
+    if let Some(path) = output {
+        save_report(&path, &results).await?;
+    }
+
     Ok(())
 }

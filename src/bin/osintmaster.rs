@@ -4,7 +4,10 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use osint_master::{
     Cli, Commands,
-    domain::{SubdomainScanner, enumeration, run_domain_lookup, takeover},
+    domain::{
+        enumerate_subdomains, run_domain_lookup,
+        takeover::{self, run_domain_lookup_sslmate},
+    },
     ip::run_ip_lookup,
     username::run_username_lookup,
 };
@@ -17,14 +20,10 @@ async fn main() -> Result<()> {
         Commands::Ip { address } => run_ip_lookup(address, cli.output).await,
         Commands::User { name } => run_username_lookup(name, cli.output).await,
         Commands::Domain { name } => {
-            dotenvy::dotenv().ok();
-            let token = std::env::var("CENSYS_API_TOKEN")
-                .context("CENSYS_API_TOKEN not found in .env file")?;
-
-            let scanner = SubdomainScanner::new(token, name);
-
-            let results = scanner.enumerate(1).await?;
-            exit(0)
+            match run_domain_lookup_sslmate(name.clone(), cli.output.clone(), 50).await {
+                Err(_) => run_domain_lookup(name.clone(), cli.output, 1).await,
+                _ => Ok(()),
+            }
         }
     }?;
     Ok(())
