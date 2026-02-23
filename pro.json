@@ -1,0 +1,88 @@
+{
+  "username": "kill-ux",
+  "total_checked": 6,
+  "total_found": 6,
+  "platforms": [
+    {
+      "name": "GitHub",
+      "url": "https://api.github.com/users/kill-ux",
+      "found": true,
+      "profile": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/185858933?v=4",
+        "bio": "##### With Rust , We Trust",
+        "blog": "",
+        "company": "zone01",
+        "created_at": "2024-10-21T22:49:38Z",
+        "email": null,
+        "followers": 43,
+        "following": 131,
+        "hireable": null,
+        "html_url": "https://github.com/kill-ux",
+        "location": "Morocco Oujda",
+        "login": "kill-ux",
+        "name": "Mustapha Boutoub",
+        "public_gists": 0,
+        "public_repos": 92,
+        "twitter_username": null,
+        "updated_at": "2026-02-22T10:16:47Z"
+      },
+      "error": null
+    },
+    {
+      "name": "GitLab",
+      "url": "https://gitlab.com/api/v4/users?username=kill-ux",
+      "found": true,
+      "profile": {
+        "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/34848738/avatar.png",
+        "id": 34848738,
+        "locked": false,
+        "name": "Mustapha Boutoub",
+        "public_email": "mustaphaboutoubdev@gmail.com",
+        "state": "active",
+        "username": "kill-ux",
+        "web_url": "https://gitlab.com/kill-ux"
+      },
+      "error": null
+    },
+    {
+      "name": "HackerNews",
+      "url": "https://hacker-news.firebaseio.com/v0/user/kill-ux.json",
+      "found": true,
+      "profile": null,
+      "error": null
+    },
+    {
+      "name": "Reddit",
+      "url": "https://www.reddit.com/user/kill-ux/about.json",
+      "found": true,
+      "profile": {
+        "avatar": "https://styles.redditmedia.com/t5_gop9bo/styles/profileIcon_ntoawwtst6lg1.jpg?width=256&amp;height=256&amp;crop=256:256,smart&amp;s=701b79448e2c62892ebb529f8a6e2fdc24f9bce4",
+        "bio": "#with_rust_we_trust",
+        "comment_karma": 0,
+        "created_utc": 1771845753.0,
+        "followers": 0,
+        "is_gold": false,
+        "is_mod": false,
+        "link_karma": 1,
+        "total_karma": 1,
+        "username": "kill-ux"
+      },
+      "error": null
+    },
+    {
+      "name": "Steam",
+      "url": "https://steamcommunity.com/id/kill-ux/?xml=1",
+      "found": true,
+      "profile": null,
+      "error": "Failed to parse JSON: error decoding response body: expected value at line 1 column 1"
+    },
+    {
+      "name": "Twitter (via Nitter)",
+      "url": "https://nitter.net/kill-ux",
+      "found": true,
+      "profile": null,
+      "error": null
+    }
+  ],
+  "scan_time": "2026-02-23T15:31:16.547032833+00:00"
+}

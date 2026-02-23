@@ -1,0 +1,101 @@
+[
+    {
+        "name": "GitHub",
+        "url": "https://api.github.com/users/{}",
+        "platform_type": "api",
+        "not_found_indicators": ["Not Found"],
+        "profile_fields": [
+            {"name": "login", "path": "/login"},
+            {"name": "name", "path": "/name"},
+            {"name": "company", "path": "/company"},
+            {"name": "location", "path": "/location"},
+            {"name": "email", "path": "/email"},
+            {"name": "bio", "path": "/bio"},
+            {"name": "followers", "path": "/followers"},
+            {"name": "following", "path": "/following"},
+            {"name": "public_repos", "path": "/public_repos"},
+            {"name": "public_gists", "path": "/public_gists"},
+            {"name": "created_at", "path": "/created_at"},
+            {"name": "updated_at", "path": "/updated_at"},
+            {"name": "twitter_username", "path": "/twitter_username"},
+            {"name": "blog", "path": "/blog"},
+            {"name": "hireable", "path": "/hireable"},
+            {"name": "avatar_url", "path": "/avatar_url"},
+            {"name": "html_url", "path": "/html_url"}
+        ]
+    },
+    {
+        "name": "GitLab",
+        "url": "https://gitlab.com/api/v4/users?username={}",
+        "platform_type": "api",
+        "not_found_indicators": ["[]"],
+        "profile_fields": [
+            {"name": "name", "path": "/0/name"},
+            {"name": "bio", "path": "/0/bio"},
+            {"name": "followers", "path": "/0/followers"},
+            {"name": "username", "path": "/0/username"},
+            {"name": "id", "path": "/0/id"},
+            {"name": "public_email", "path": "/0/public_email"},
+            {"name": "state", "path": "/0/state"},
+            {"name": "locked", "path": "/0/locked"},
+            {"name": "avatar_url", "path": "/0/avatar_url"},
+            {"name": "web_url", "path": "/0/web_url"},
+            {"name": "location", "path": "/0/location"},
+            {"name": "created_at", "path": "/0/created_at"},
+            {"name": "updated_at", "path": "/0/updated_at"}
+        ]
+    },
+    {
+        "name": "Reddit",
+        "url": "https://www.reddit.com/user/{}/about.json",
+        "platform_type": "api",
+        "not_found_indicators": ["404"],
+        "profile_fields": [
+
+            {"name": "username", "path": "/data/name"},
+            {"name": "created_utc", "path": "/data/created_utc"},
+            {"name": "total_karma", "path": "/data/total_karma"},
+            {"name": "link_karma", "path": "/data/link_karma"},
+            {"name": "comment_karma", "path": "/data/comment_karma"},
+            {"name": "followers", "path": "/data/subreddit/subscribers"},
+            {"name": "bio", "path": "/data/subreddit/public_description"},
+            {"name": "is_gold", "path": "/data/is_gold"},
+            {"name": "is_mod", "path": "/data/is_mod"},
+            {"name": "avatar", "path": "/data/icon_img"},
+            {"name": "profile_url", "path": "/data/profile_url"}
+        ]
+    },
+    {
+        "name": "HackerNews",
+        "url": "https://hacker-news.firebaseio.com/v0/user/{}.json",
+        "platform_type": "api",
+        "not_found_indicators": ["null"],
+        "profile_fields": [
+            {"name": "id", "path": "/id"},
+            {"name": "karma", "path": "/karma"},
+            {"name": "created", "path": "/created"}
+        ]
+    },
+    {
+        "name": "Twitter (via Nitter)",
+        "url": "https://nitter.net/{}",
+        "platform_type": "web",
+        "not_found_indicators": ["This account doesn't exist", "page doesn't exist"],
+        "profile_fields": []
+    },
+    {
+        "name": "Steam",
+        "url": "https://steamcommunity.com/id/{}/?xml=1",
+        "platform_type": "api",
+        "not_found_indicators": ["The specified profile could not be found"],
+        "profile_fields": [
+            {"name": "username", "path": "/profile/steamID"},
+            {"name": "real_name", "path": "/profile/realname"},
+            {"name": "location", "path": "/profile/location"},
+            {"name": "summary", "path": "/profile/summary"},
+            {"name": "avatar", "path": "/profile/avatarFull"},
+            {"name": "joined", "path": "/profile/joinedDate"},
+            {"name": "online_status", "path": "/profile/onlineState"}
+        ]
+    }
+]

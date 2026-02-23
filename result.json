@@ -1,0 +1,98 @@
+[
+  {
+    "domain": "example.com",
+    "ip": "104.18.27.120",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "example.com",
+    "ip": "104.18.26.120",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "example.com",
+    "ip": "2606:4700::6812:1a78",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "example.com",
+    "ip": "2606:4700::6812:1b78",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "www.example.com",
+    "ip": "104.18.26.120",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "www.example.com",
+    "ip": "104.18.27.120",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "www.example.com",
+    "ip": "2606:4700::6812:1b78",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "www.example.com",
+    "ip": "2606:4700::6812:1a78",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA OV R36",
+    "cert_id": 12937142056,
+    "expiry": "Wed, 2 Dec 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "b46167cd8eda2b77f501c846f3acc36f8fbbd484ea518d60ed04d88fba89e7ec",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  }
+]
