@@ -146,15 +146,15 @@ pub struct SubdomainInfo {
 struct CertSpotterIssuance {
     id: String,
     dns_names: Option<Vec<String>>,
-    not_before: String,
+    _not_before: String,
     not_after: String,
     issuer: Option<IssuerInfo>,
-    revoked: Option<bool>,
+    _revoked: Option<bool>,
     #[serde(default)]
-    revocation: Option<RevocationInfo>,
+    _revocation: Option<RevocationInfo>,
     #[serde(default)]
     pubkey: Option<PubKeyInfo>,
-    cert_der: Option<String>,
+    _cert_der: Option<String>,
     tbs_sha256: Option<String>,
 }
 
@@ -393,13 +393,11 @@ pub async fn enumerate_subdomains(
 
     // Resolve each subdomain with concurrency control
     println!("\nResolving subdomains...");
-    let resolver = Arc::new(TokioAsyncResolver::tokio_from_system_conf()?);
     let mut domain_to_ips: HashMap<String, Vec<String>> = HashMap::new();
     let mut set = JoinSet::new();
     let semaphore = Arc::new(Semaphore::new(threads));
 
     for subdomain in all_subdomains.clone() {
-        let resolver = resolver.clone();
         let permit = semaphore.clone();
 
         set.spawn(async move {
