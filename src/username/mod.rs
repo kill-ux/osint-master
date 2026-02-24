@@ -1,18 +1,12 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Ok, Result};
+use dotenvy::dotenv;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::{fs::File, io::AsyncReadExt, sync::Semaphore, task::JoinSet};
 
-pub mod github;
-pub mod gitlab;
-pub mod reddit;
-use github::GitHubProfile;
-
 use colored::Colorize;
-
-use crate::username::{gitlab::GitLabProfile, reddit::RedditProfile};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ProfileField {
@@ -27,6 +21,7 @@ pub struct Platform {
     pub platform_type: PlatformType,
     pub not_found_indicators: Vec<String>,
     pub profile_fields: Option<Vec<ProfileField>>,
+    pub api_key: String,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -114,7 +109,7 @@ async fn scan_platforms(
 
     let mut results = Vec::new();
     while let Some(res) = set.join_next().await {
-        if let Ok(platform_result) = res {
+        if let Result::Ok(Result::Ok(platform_result)) = res {
             results.push(platform_result);
         }
     }
@@ -142,7 +137,7 @@ async fn check_platform(
     platform: &Platform,
     url: &str,
     client: &Client,
-) -> PlatformResult {
+) -> Result<PlatformResult> {
     println!("  Checking {} on {}...", username, platform.name);
 
     // Handle different platform types
@@ -152,139 +147,39 @@ async fn check_platform(
     }
 }
 
-// async fn check_api_platform(
-//     username: &str,
-//     platform: &Platform,
-//     url: &str,
-//     client: &Client,
-// ) -> PlatformResult {
-//     let response = client.get(url).send().await;
-
-//     match response {
-//         Ok(resp) => {
-//             let status = resp.status();
-
-//             if status.is_success() {
-//                 let profile = match platform.name.as_str() {
-//                     "GitHub" => match resp.json::<GitHubProfile>().await {
-//                         Ok(profile) => Some(ProfileData::GitHub(profile)),
-//                         Err(e) => {
-//                             return PlatformResult {
-//                                 name: platform.name.clone(),
-//                                 url: url.to_string(),
-//                                 found: true,
-//                                 profile: None,
-//                                 error: Some(format!("Failed to parse GitHub profile: {}", e)),
-//                             };
-//                         }
-//                     },
-//                     "Reddit" => {
-//                         // NEW
-//                         match reddit::check_reddit(username, client).await {
-//                             Ok(Some(profile)) => Some(ProfileData::Reddit(profile)),
-//                             Ok(None) => {
-//                                 return PlatformResult {
-//                                     name: platform.name.clone(),
-//                                     url: url.to_string(),
-//                                     found: false,
-//                                     profile: None,
-//                                     error: None,
-//                                 };
-//                             }
-//                             Err(e) => {
-//                                 return PlatformResult {
-//                                     name: platform.name.clone(),
-//                                     url: url.to_string(),
-//                                     found: false,
-//                                     profile: None,
-//                                     error: Some(e.to_string()),
-//                                 };
-//                             }
-//                         }
-//                     }
-//                     "GitLab" => {
-//                         match gitlab::GitLabProfile::check(username, client).await {
-//                             Ok(Some(profile)) => Some(ProfileData::GitLab(profile)),
-//                             Ok(None) => {
-//                                 return PlatformResult {
-//                                     name: platform.name.clone(),
-//                                     url: url.to_string(),
-//                                     found: false,
-//                                     profile: None,
-//                                     error: None,
-//                                 };
-//                             }
-//                             Err(e) => {
-//                                 return PlatformResult {
-//                                     name: platform.name.clone(),
-//                                     url: url.to_string(),
-//                                     found: false,
-//                                     profile: None,
-//                                     error: Some(e.to_string()),
-//                                 };
-//                             }
-//                         }
-//                     }
-//                     _ => {
-//                         // Generic JSON fallback
-//                         match resp.json::<serde_json::Value>().await {
-//                             Ok(json) => Some(ProfileData::Unknown(json)),
-//                             Err(_) => None,
-//                         }
-//                     }
-//                 };
-
-//                 PlatformResult {
-//                     name: platform.name.clone(),
-//                     url: url.to_string(),
-//                     found: true,
-//                     profile,
-//                     error: None,
-//                 }
-//             } else if status == 404 || status == 403 {
-//                 PlatformResult {
-//                     name: platform.name.clone(),
-//                     url: url.to_string(),
-//                     found: false,
-//                     profile: None,
-//                     error: None,
-//                 }
-//             } else {
-//                 PlatformResult {
-//                     name: platform.name.clone(),
-//                     url: url.to_string(),
-//                     found: false,
-//                     profile: None,
-//                     error: Some(format!("HTTP {}", status)),
-//                 }
-//             }
-//         }
-//         Err(e) => PlatformResult {
-//             name: platform.name.clone(),
-//             url: url.to_string(),
-//             found: false,
-//             profile: None,
-//             error: Some(e.to_string()),
-//         },
-//     }
-// }
-
 async fn check_api_platform(
     username: &str,
     platform: &Platform,
     url: &str,
     client: &Client,
-) -> PlatformResult {
-    let response = client.get(url).send().await;
+) -> Result<PlatformResult> {
+    let mut request = client.get(url);
 
-    match response {
-        Ok(resp) => {
+    // If an API key environment variable is specified, add it as a Bearer token
+    if !platform.api_key.is_empty() {
+        dotenv().ok(); // Load .env file (consider moving this to main)
+        if let Result::Ok(api_key) = env::var(&platform.api_key) {
+            let auth_value = format!("Bearer {}", api_key);
+            request = request.header(reqwest::header::AUTHORIZATION, auth_value);
+        } else {
+            // Optionally log a warning or continue without auth
+            eprintln!(
+                "Warning: API key '{}' not found in environment",
+                platform.api_key
+            );
+        }
+    }
+
+    let response = request.send().await;
+
+    let profile = match response {
+        Result::Ok(resp) => {
             let status = resp.status();
 
             if status.is_success() {
                 // Try to parse JSON
                 match resp.json::<serde_json::Value>().await {
-                    Ok(json) => {
+                    Result::Ok(json) => {
                         // If there are profile_fields defined, extract them
                         let profile = if let Some(fields) = &platform.profile_fields {
                             let mut extracted = serde_json::Map::new();
@@ -344,7 +239,8 @@ async fn check_api_platform(
             profile: None,
             error: Some(e.to_string()),
         },
-    }
+    };
+    Ok(profile)
 }
 
 async fn check_web_platform(
@@ -352,16 +248,16 @@ async fn check_web_platform(
     platform: &Platform,
     url: &str,
     client: &Client,
-) -> PlatformResult {
+) -> Result<PlatformResult> {
     let response = client.get(url).send().await;
 
-    match response {
-        Ok(resp) => {
+    let profile = match response {
+        Result::Ok(resp) => {
             let status = resp.status();
 
             if status.is_success() {
                 // For web platforms, check if page contains "not found" indicators
-                if let Ok(html) = resp.text().await {
+                if let Result::Ok(html) = resp.text().await {
                     let not_found = platform
                         .not_found_indicators
                         .iter()
@@ -408,7 +304,8 @@ async fn check_web_platform(
             profile: None,
             error: Some(e.to_string()),
         },
-    }
+    };
+    Ok(profile)
 }
 
 fn print_report(report: &UsernameReport) {

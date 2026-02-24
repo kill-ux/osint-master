@@ -4,6 +4,7 @@
         "url": "https://api.github.com/users/{}",
         "platform_type": "api",
         "not_found_indicators": ["Not Found"],
+        "api_key": "",
         "profile_fields": [
             {"name": "login", "path": "/login"},
             {"name": "name", "path": "/name"},
@@ -29,6 +30,7 @@
         "url": "https://gitlab.com/api/v4/users?username={}",
         "platform_type": "api",
         "not_found_indicators": ["[]"],
+        "api_key": "",
         "profile_fields": [
             {"name": "name", "path": "/0/name"},
             {"name": "bio", "path": "/0/bio"},
@@ -50,6 +52,7 @@
         "url": "https://www.reddit.com/user/{}/about.json",
         "platform_type": "api",
         "not_found_indicators": ["404"],
+        "api_key": "",
         "profile_fields": [
 
             {"name": "username", "path": "/data/name"},
@@ -69,6 +72,7 @@
         "name": "HackerNews",
         "url": "https://hacker-news.firebaseio.com/v0/user/{}.json",
         "platform_type": "api",
+        "api_key": "",
         "not_found_indicators": ["null"],
         "profile_fields": [
             {"name": "id", "path": "/id"},
@@ -79,6 +83,7 @@
     {
         "name": "Twitter (via Nitter)",
         "url": "https://nitter.net/{}",
+        "api_key": "",
         "platform_type": "web",
         "not_found_indicators": ["This account doesn't exist", "page doesn't exist"],
         "profile_fields": []
@@ -87,6 +92,7 @@
         "name": "Steam",
         "url": "https://steamcommunity.com/id/{}/?xml=1",
         "platform_type": "api",
+        "api_key": "STEAM_API_KEY",
         "not_found_indicators": ["The specified profile could not be found"],
         "profile_fields": [
             {"name": "username", "path": "/profile/steamID"},
