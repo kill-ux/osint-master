@@ -1,13 +1,8 @@
-use std::process::exit;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use osint_master::{
     Cli, Commands,
-    domain::{
-        enumerate_subdomains, run_domain_lookup,
-        takeover::{self, run_domain_lookup_sslmate},
-    },
+    domain::{run_domain_lookup, takeover::run_domain_lookup_sslmate},
     ip::run_ip_lookup,
     username::run_username_lookup,
 };

@@ -1,0 +1,82 @@
+{
+  "username": "elonemusk",
+  "total_checked": 6,
+  "total_found": 6,
+  "platforms": [
+    {
+      "name": "GitHub",
+      "found": true,
+      "profile": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/7881952?v=4",
+        "bio": null,
+        "blog": "",
+        "company": null,
+        "created_at": "2014-06-13T16:01:21Z",
+        "email": null,
+        "followers": 0,
+        "following": 0,
+        "hireable": null,
+        "html_url": "https://github.com/EloneMusk",
+        "location": null,
+        "login": "EloneMusk",
+        "name": null,
+        "public_gists": 0,
+        "public_repos": 12,
+        "twitter_username": null,
+        "updated_at": "2026-02-03T21:04:39Z"
+      },
+      "error": null
+    },
+    {
+      "name": "GitLab",
+      "found": true,
+      "profile": null,
+      "error": null
+    },
+    {
+      "name": "HackerNews",
+      "found": true,
+      "profile": null,
+      "error": null
+    },
+    {
+      "name": "Reddit",
+      "found": true,
+      "profile": {
+        "avatar": "https://styles.redditmedia.com/t5_6bp0fb/styles/profileIcon_snoo-nftv2_bmZ0X2VpcDE1NToxMzdfNDE2OWZmNGQzMTUwMmNiMWQwOWI4NTA0YTAwYThhNjMyZmIwODQ4Zl82MDA0NzUy_rare_5aafdc11-c161-4d10-89b4-a5605e6f8df5-headshot.png?width=256&amp;height=256&amp;crop=256:256,smart&amp;s=5be8eabcff16aeaa97d8b516f5fd1ad50f806b3c",
+        "bio": "Starlink",
+        "comment_karma": 10388,
+        "created_utc": 1651761697.0,
+        "followers": 0,
+        "is_gold": false,
+        "is_mod": true,
+        "link_karma": 11334,
+        "total_karma": 21722,
+        "username": "EloneMusk"
+      },
+      "error": null
+    },
+    {
+      "name": "Steam",
+      "found": true,
+      "profile": {
+        "avatar": "https://avatars.steamstatic.com/fef49e7fa7e1997310d705b2a6158ff8dc1cdfeb_full.jpg",
+        "communityvisibilitystate": 3,
+        "personaname": "dreadlight",
+        "personastate": 0,
+        "profileurl": "https://steamcommunity.com/id/elonemusk/",
+        "realname": "Mertens",
+        "steamid": "76561199185347185",
+        "timecreated": 1625061332
+      },
+      "error": null
+    },
+    {
+      "name": "Twitter (via Nitter)",
+      "found": true,
+      "profile": null,
+      "error": null
+    }
+  ],
+  "scan_time": "2026-02-26T13:56:23.162283875+00:00"
+}
