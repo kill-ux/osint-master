@@ -1,6 +1,6 @@
 use std::{env, sync::Arc};
 
-use anyhow::{Ok, Result};
+use anyhow::Result;
 use dotenvy::dotenv;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -18,6 +18,7 @@ pub struct ProfileField {
 pub struct Platform {
     pub name: String,
     pub url: String,
+    pub pre_url: Option<String>,
     pub platform_type: PlatformType,
     pub not_found_indicators: Vec<String>,
     pub profile_fields: Option<Vec<ProfileField>>,
@@ -99,8 +100,7 @@ async fn scan_platforms(
         let client = client.clone();
         let semaphore = semaphore.clone();
         let username = username.to_string();
-        let url = platform.url.replace("{}", &username);
-
+        let url = platform.url.replace("{username}", &username);
         set.spawn(async move {
             let _permit = semaphore.acquire().await;
             check_platform(&username, &platform, &url, &client).await
@@ -109,7 +109,7 @@ async fn scan_platforms(
 
     let mut results = Vec::new();
     while let Some(res) = set.join_next().await {
-        if let Result::Ok(Result::Ok(platform_result)) = res {
+        if let Ok(Ok(platform_result)) = res {
             results.push(platform_result);
         }
     }
@@ -147,39 +147,63 @@ async fn check_platform(
     }
 }
 
+async fn check_pre_url(username: &str, pre_url: &str, client: &Client, api_key: Option<String>) -> Result<Option<String>> {
+    let pre_url = pre_url.replace("{username}", username).replace("{key}", &api_key.unwrap_or_else(|| String::new()));
+    let response = client.get(&pre_url).send().await?;
+    eprintln!("Pre-URL request: {}", pre_url); // debugging
+
+    if response.status().is_success() {
+        if let Ok(json) = response.json::<serde_json::Value>().await {
+            eprintln!("Pre-URL response JSON: {:?}", json); // debugging
+            if let Some(steamid) = json.pointer("/response/steamid").and_then(|v| v.as_str()) {
+                return Ok(Some(steamid.to_string()));
+            }
+        }
+    }
+
+    Ok(None)
+}
+
+
 async fn check_api_platform(
     username: &str,
     platform: &Platform,
     url: &str,
     client: &Client,
 ) -> Result<PlatformResult> {
-    let mut request = client.get(url);
-
-    // If an API key environment variable is specified, add it as a Bearer token
+    let mut api_key = None;
     if !platform.api_key.is_empty() {
         dotenv().ok(); // Load .env file (consider moving this to main)
-        if let Result::Ok(api_key) = env::var(&platform.api_key) {
-            let auth_value = format!("Bearer {}", api_key);
+        api_key = env::var(&platform.api_key).ok();
+    }
+
+    let mut url = url.to_string();
+    if let Some(pre_url) = &platform.pre_url && let Some(id) = check_pre_url(username, pre_url, client,api_key.clone()).await? {
+        url = url.replace("{id}", &id);
+    }
+    let mut request = client.get(&url);
+
+    // If an API key environment variable is specified, add it as a Bearer token
+    if let Some(key) = &api_key {
+        let auth_value = format!("Bearer {}", key);
             request = request.header(reqwest::header::AUTHORIZATION, auth_value);
-        } else {
-            // Optionally log a warning or continue without auth
-            eprintln!(
+    } else if platform.api_key.is_empty() {
+         eprintln!(
                 "Warning: API key '{}' not found in environment",
                 platform.api_key
             );
-        }
     }
-
+   
     let response = request.send().await;
 
     let profile = match response {
-        Result::Ok(resp) => {
+        Ok(resp) => {
             let status = resp.status();
 
             if status.is_success() {
                 // Try to parse JSON
                 match resp.json::<serde_json::Value>().await {
-                    Result::Ok(json) => {
+                    Ok(json) => {
                         // If there are profile_fields defined, extract them
                         let profile = if let Some(fields) = &platform.profile_fields {
                             let mut extracted = serde_json::Map::new();
@@ -252,12 +276,12 @@ async fn check_web_platform(
     let response = client.get(url).send().await;
 
     let profile = match response {
-        Result::Ok(resp) => {
+        Ok(resp) => {
             let status = resp.status();
 
             if status.is_success() {
                 // For web platforms, check if page contains "not found" indicators
-                if let Result::Ok(html) = resp.text().await {
+                if let Ok(html) = resp.text().await {
                     let not_found = platform
                         .not_found_indicators
                         .iter()
