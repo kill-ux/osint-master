@@ -2,11 +2,9 @@
     {
         "name": "GitHub",
         "url": "https://api.github.com/users/{username}",
-        "platform_type": "api",
         "not_found_indicators": [
             "Not Found"
         ],
-        "api_key": "",
         "profile_fields": [
             {
                 "name": "login",
@@ -81,11 +79,9 @@
     {
         "name": "GitLab",
         "url": "https://gitlab.com/api/v4/users?username={username}",
-        "platform_type": "api",
         "not_found_indicators": [
             "[]"
         ],
-        "api_key": "",
         "profile_fields": [
             {
                 "name": "name",
@@ -144,11 +140,9 @@
     {
         "name": "Reddit",
         "url": "https://www.reddit.com/user/{username}/about.json",
-        "platform_type": "api",
         "not_found_indicators": [
             "404"
         ],
-        "api_key": "",
         "profile_fields": [
             {
                 "name": "username",
@@ -199,8 +193,6 @@
     {
         "name": "HackerNews",
         "url": "https://hacker-news.firebaseio.com/v0/user/{username}.json",
-        "platform_type": "api",
-        "api_key": "",
         "not_found_indicators": [
             "null"
         ],
@@ -222,8 +214,6 @@
     {
         "name": "Mastodon",
         "url": "https://mastodon.social/api/v1/accounts/lookup?acct={username}",
-       
-        "platform_type": "api",
         "not_found_indicators": [
             "Record not found"
         ],
@@ -265,8 +255,14 @@
     {
         "name": "Steam",
         "url": "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={key}&steamids={id}",
+        "pre_process": {
+            "url": "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={key}&vanityurl={username}",
+            "response_path": "/response/steamid",
+            "not_found_indicators": [
+                "The specified profile could not be found"
+            ]
+        },
         "pre_url": "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={key}&vanityurl={username}",
-        "platform_type": "api",
         "api_key": "STEAM_API_KEY",
         "not_found_indicators": [
             "The specified profile could not be found"
@@ -311,6 +307,71 @@
             {
                 "name": "communityvisibilitystate",
                 "path": "/response/players/0/communityvisibilitystate"
+            }
+        ]
+    },
+    {
+        "name": "codeberg",
+        "url": "https://codeberg.org/api/v1/users/{username}",
+        "not_found_indicators": [
+            "404"
+        ],
+        "profile_fields": [
+            {
+                "name": "id",
+                "path": "/id"
+            },
+            {
+                "name": "login",
+                "path": "/login"
+            },
+            {
+                "name": "full_name",
+                "path": "/full_name"
+            },
+            {
+                "name": "email",
+                "path": "/email"
+            },
+            {
+                "name": "avatar_url",
+                "path": "/avatar_url"
+            },
+            {
+                "name": "html_url",
+                "path": "/html_url"
+            },
+            {
+                "name": "location",
+                "path": "/location"
+            },
+            {
+                "name": "pronouns",
+                "path": "/pronouns"
+            },
+            {
+                "name": "website",
+                "path": "/website"
+            },
+            {
+                "name": "description",
+                "path": "/description"
+            },
+            {
+                "name": "visibility",
+                "path": "/visibility"
+            },
+            {
+                "name": "followers_count",
+                "path": "/followers_count"
+            },
+            {
+                "name": "following_count",
+                "path": "/following_count"
+            },
+            {
+                "name": "starred_repos_count",
+                "path": "/starred_repos_count"
             }
         ]
     }

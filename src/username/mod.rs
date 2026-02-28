@@ -21,7 +21,7 @@ pub struct Platform {
     pub name: String,
     pub url: String,
     pub pre_url: Option<String>,
-    pub platform_type: PlatformType,
+    pub pre_process: Option<PreProcess>,
     pub not_found_indicators: Vec<String>,
     pub profile_fields: Option<Vec<ProfileField>>,
     pub api_key: Option<String>,
@@ -29,17 +29,17 @@ pub struct Platform {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct PreProcess {
+    pub url: String,
+    pub response_path: String,
+    pub not_found_indicators: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct HtmlExtractor {
     pub name: String,
     pub pattern: String,
     pub group: Option<usize>,
-}
-
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum PlatformType {
-    Api,
-    Web,
 }
 
 pub type ProfileData = serde_json::Value;
@@ -111,14 +111,13 @@ async fn scan_platforms(
         let semaphore = semaphore.clone();
         let username = username.to_string();
         let url = platform.url.replace("{username}", &username);
-        let pre_url = platform
-            .pre_url
-            .clone()
-            .unwrap_or_else(|| String::new())
-            .replace("{username}", &username);
+        let pre_process = platform.pre_process.clone().map(|mut o| {
+            o.url = o.url.replace("{username}", &username);
+            o
+        });
         set.spawn(async move {
             let _permit = semaphore.acquire().await;
-            check_platform(&username, &platform, &url, &pre_url, &client).await
+            check_api_platform(&platform, &url, &client, pre_process).await
         });
     }
 
@@ -147,28 +146,15 @@ async fn scan_platforms(
     })
 }
 
-async fn check_platform(
-    username: &str,
-    platform: &Platform,
-    url: &str,
-    pre_url: &str,
-    client: &Client,
-) -> Result<PlatformResult> {
-    println!("  Checking {} on {}...", username, platform.name);
-
-    // Handle different platform types
-    match platform.platform_type {
-        PlatformType::Api => check_api_platform(username, platform, url, pre_url, client).await,
-        PlatformType::Web => check_web_platform(platform, url, client).await,
-    }
-}
-
-async fn check_pre_url(pre_url: &str, client: &Client) -> Result<Option<String>> {
-    let response = client.get(pre_url).send().await?;
+async fn check_pre_url(pre_process: PreProcess, client: &Client) -> Result<Option<String>> {
+    let response = client.get(pre_process.url).send().await?;
 
     if response.status().is_success() {
         if let Ok(json) = response.json::<serde_json::Value>().await {
-            if let Some(steamid) = json.pointer("/response/steamid").and_then(|v| v.as_str()) {
+            if let Some(steamid) = json
+                .pointer(&pre_process.response_path)
+                .and_then(|v| v.as_str())
+            {
                 return Ok(Some(steamid.to_string()));
             }
         }
@@ -178,28 +164,29 @@ async fn check_pre_url(pre_url: &str, client: &Client) -> Result<Option<String>>
 }
 
 async fn check_api_platform(
-    username: &str,
     platform: &Platform,
     url: &str,
-    pre_url: &str,
     client: &Client,
+    pre_process: Option<PreProcess>,
 ) -> Result<PlatformResult> {
     let mut api_key = None;
-    let mut pre_url = pre_url.to_string();
+    let mut pre_process = pre_process.clone();
     let mut url = url.to_string();
 
     if let Some(api_key_name) = &platform.api_key {
-        dotenv().ok(); // Load .env file (consider moving this to main)
+        dotenv().ok();
         api_key = env::var(api_key_name).ok();
         if let Some(key) = &api_key {
-            pre_url = pre_url.replace("{key}", key);
+            pre_process
+                .as_mut()
+                .map(|p| p.url = p.url.replace("{key}", key));
             url = url.replace("{key}", key);
         }
     }
 
     let mut url = url.to_string();
-    if !pre_url.is_empty()
-        && let Some(id) = check_pre_url(&pre_url, client).await?
+    if let Some(p) = pre_process
+        && let Some(id) = check_pre_url(p, client).await?
     {
         url = url.replace("{id}", &id);
     }
@@ -303,121 +290,6 @@ fn check_special_cases(json: &Value) -> bool {
         return !players.as_array().map_or(false, |o| o.is_empty());
     }
     true
-}
-
-async fn check_web_platform(
-    platform: &Platform,
-    url: &str,
-    client: &Client,
-) -> Result<PlatformResult> {
-    let response = client.get(url).send().await;
-    dbg!(&response);
-    dbg!(&url);
-
-    match response {
-        Ok(resp) => {
-            let status = resp.status();
-            dbg!(resp.content_length());
-
-            if status.is_success() {
-                // Try to read the HTML body
-                let html = match resp.text().await {
-                    Ok(text) => text,
-                    Err(_) => {
-                        // Cannot read body – assume found but no data
-                        return Ok(PlatformResult {
-                            url: url.to_string(),
-                            name: platform.name.clone(),
-                            found: true,
-                            profile: None,
-                            error: None,
-                        });
-                    }
-                };
-
-                dbg!(&html);
-
-                // Check if the page indicates "not found"
-                let not_found = platform
-                    .not_found_indicators
-                    .iter()
-                    .any(|indicator| html.contains(indicator));
-
-                if not_found {
-                    return Ok(PlatformResult {
-                        url: url.to_string(),
-                        name: platform.name.clone(),
-                        found: false,
-                        profile: None,
-                        error: None,
-                    });
-                }
-
-                // If extractors are defined, apply them
-                let profile = if let Some(extractors) = &platform.html_extractors {
-                    let mut extracted = serde_json::Map::new();
-                    for ext in extractors {
-                        if let Ok(re) = Regex::new(&ext.pattern) {
-                            dbg!(&html);
-                            if let Some(caps) = re.captures(&html) {
-                                dbg!(&caps);
-                                let group = ext.group.unwrap_or(1);
-                                if let Some(value) = caps.get(group) {
-                                    dbg!(
-                                        "Extractor '{}' found value: {}",
-                                        &ext.name,
-                                        value.as_str()
-                                    );
-                                    extracted.insert(
-                                        ext.name.clone(),
-                                        serde_json::Value::String(value.as_str().to_string()),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    if extracted.is_empty() {
-                        None
-                    } else {
-                        Some(serde_json::Value::Object(extracted))
-                    }
-                } else {
-                    None
-                };
-
-                Ok(PlatformResult {
-                    url: url.to_string(),
-                    name: platform.name.clone(),
-                    found: true,
-                    profile,
-                    error: None,
-                })
-            } else if status == 404 {
-                Ok(PlatformResult {
-                    url: url.to_string(),
-                    name: platform.name.clone(),
-                    found: false,
-                    profile: None,
-                    error: None,
-                })
-            } else {
-                Ok(PlatformResult {
-                    url: url.to_string(),
-                    name: platform.name.clone(),
-                    found: false,
-                    profile: None,
-                    error: Some(format!("HTTP {}", status)),
-                })
-            }
-        }
-        Err(e) => Ok(PlatformResult {
-            url: url.to_string(),
-            name: platform.name.clone(),
-            found: false,
-            profile: None,
-            error: Some(e.to_string()),
-        }),
-    }
 }
 
 fn print_report(report: &UsernameReport) {
