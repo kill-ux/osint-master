@@ -1,6 +1,5 @@
-use iced::event::Status;
-use iced::widget::{self, Space, button, column, container, row, scrollable, text, text_input};
-use iced::{Alignment, Color, Element, Length, Sandbox, Settings, Theme, settings};
+use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
+use iced::{Alignment, Color, Element, Length, Sandbox, Settings, Theme};
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -44,8 +43,6 @@ pub struct OsintGui {
     input: String,
     output: String,
     is_loading: bool,
-    session_count: u32,
-    total_queries: u32,
 }
 
 impl Sandbox for OsintGui {
@@ -57,8 +54,6 @@ impl Sandbox for OsintGui {
             input: String::new(),
             output: String::new(),
             is_loading: false,
-            session_count: 0,
-            total_queries: 0,
         }
     }
 
@@ -133,7 +128,7 @@ impl Sandbox for OsintGui {
 
         let search_btn = button(
             row![
-                text(if self.is_loading { "⏳" } else { "🚀" }).size(18),
+                text(if self.is_loading { "..." } else { "->" }).size(18),
                 text(if self.is_loading {
                     "Scanning..."
                 } else {
@@ -148,7 +143,7 @@ impl Sandbox for OsintGui {
         .on_press(Message::SearchPressed)
         .style(iced::theme::Button::Primary);
 
-        let clear_btn = button(row![text("🗑️").size(18), text("CLEAR").size(14)].spacing(6))
+        let clear_btn = button(row![text("[X]").size(18), text("CLEAR").size(14)].spacing(6))
             .padding(14)
             .width(Length::from(100))
             .on_press(Message::ClearOutput)
@@ -181,12 +176,12 @@ impl Sandbox for OsintGui {
         // Output display
         let output_content = if self.output.is_empty() {
             column![
-                text("🚀 Ready for reconnaissance")
+                text("Ready for reconnaissance")
                     .size(16)
                     .style(Color::from_rgb(0.7, 0.7, 0.7)),
-                text("🌐 IP → ASN, GeoIP, Services").size(13),
-                text("🔗 DOMAIN → Subdomains, Takeovers").size(13),
-                text("👤 USER → Social Profiles, Breaches").size(13),
+                text("IP → ASN, GeoIP, Services").size(13),
+                text("DOMAIN → Subdomains, Takeovers").size(13),
+                text("USER → Social Profiles, Breaches").size(13),
             ]
             .spacing(12)
             .padding(30)
