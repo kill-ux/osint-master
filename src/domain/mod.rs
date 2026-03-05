@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 pub mod takeover;
 pub use takeover::*;
 
-pub async fn run_domain_lookup(target: String, output: Option<String>, mut threads: usize) -> Result<()> {
+pub async fn run_domain_lookup(
+    target: String,
+    output: Option<String>,
+    mut threads: usize,
+) -> Result<()> {
     threads = threads.max(1);
     println!("Searching Domain: {}", target);
     println!(
@@ -34,11 +38,10 @@ struct CrtShEntry {
 }
 
 pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioRuntime>>;
-pub async fn run_ctr_sh(target: &str, output: Option<String>,threads: usize) -> Result<()> {
+pub async fn run_ctr_sh(target: &str, output: Option<String>, threads: usize) -> Result<()> {
     let client = Client::new();
     let url = format!("https://crt.sh/?q=.{}&output=json", target);
     let res = client.get(url).send().await?;
-
 
     if res.status() == reqwest::StatusCode::NOT_FOUND {
         println!(
@@ -85,11 +88,13 @@ pub async fn run_ctr_sh(target: &str, output: Option<String>,threads: usize) -> 
         let client_ptr = client.clone();
         let permit_limit = semaphore.clone();
         set.spawn(async move {
-            let _permit= permit_limit.acquire().await;
-            let mut info = SubdomainInfo::default();
-            info.domain = cert.name_value.clone();
-            info.record_type = "NXDOMAIN".to_string();
-            info.cert_id = cert.id;
+            let _permit = permit_limit.acquire().await;
+            let mut info = SubdomainInfo {
+                domain: cert.name_value.clone(),
+                record_type: "NXDOMAIN".to_string(),
+                cert_id: cert.id,
+                ..SubdomainInfo::default()
+            };
 
             if let Ok(mut ips) = lookup_host(&info.domain)
                 && let Some(ip) = ips.next()
@@ -174,9 +179,7 @@ mod crt_sh_date_format {
     }
 }
 
-use tokio::{
-    sync::Semaphore, task::JoinSet
-};
+use tokio::{sync::Semaphore, task::JoinSet};
 use tracing::warn;
 use trust_dns_resolver::{
     AsyncResolver, TokioAsyncResolver,
@@ -212,10 +215,10 @@ pub async fn get_cert_details_binary(info: &mut SubdomainInfo, client: Arc<Clien
         info.expiry = expiry;
     }
 
-    if let Ok(expiry_date) = DateTime::parse_from_rfc2822(&info.expiry) {
-        if expiry_date < Utc::now() {
-            add_vuln(info, "EXPIRED_CERTIFICATE");
-        }
+    if let Ok(expiry_date) = DateTime::parse_from_rfc2822(&info.expiry)
+        && expiry_date < Utc::now()
+    {
+        add_vuln(info, "EXPIRED_CERTIFICATE");
     }
 
     info.issuer = issuer;
@@ -245,7 +248,7 @@ pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
             for provider in vulnerable_providers {
                 if cname.contains(provider) {
                     // It points to a cloud service. Is that service actually alive?
-                    if let Some(_) = &info.ip {
+                    if info.ip.is_some() {
                         add_vuln(info, &format!("CRITICAL: Dangling CNAME to {}", provider));
                     }
                 }

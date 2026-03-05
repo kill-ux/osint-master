@@ -148,15 +148,13 @@ async fn scan_platforms(
 async fn check_pre_url(pre_process: PreProcess, client: &Client) -> Result<Option<String>> {
     let response = client.get(pre_process.url).send().await?;
 
-    if response.status().is_success() {
-        if let Ok(json) = response.json::<serde_json::Value>().await {
-            if let Some(steamid) = json
-                .pointer(&pre_process.response_path)
-                .and_then(|v| v.as_str())
-            {
-                return Ok(Some(steamid.to_string()));
-            }
-        }
+    if response.status().is_success()
+        && let Ok(json) = response.json::<serde_json::Value>().await
+        && let Some(steamid) = json
+            .pointer(&pre_process.response_path)
+            .and_then(|v| v.as_str())
+    {
+        return Ok(Some(steamid.to_string()));
     }
 
     Ok(None)
@@ -174,9 +172,10 @@ async fn check_api_platform(
     if let Some(api_key_name) = &platform.api_key {
         dotenv().ok();
         if let Ok(key) = env::var(api_key_name) {
-            pre_process
-                .as_mut()
-                .map(|p| p.url = p.url.replace("{key}", &key));
+            if let Some(p) = pre_process.as_mut() {
+                p.url = p.url.replace("{key}", &key);
+            }
+
             url = url.replace("{key}", &key);
         }
     }
@@ -198,8 +197,8 @@ async fn check_api_platform(
                 match resp.json::<serde_json::Value>().await {
                     Ok(json)
                         if json != Value::Null
-                            && !json.as_object().map_or(false, |o| o.is_empty())
-                            && !json.as_array().map_or(false, |o| o.is_empty()) =>
+                            && !json.as_object().is_some_and(|o| o.is_empty())
+                            && !json.as_array().is_some_and(|o| o.is_empty()) =>
                     {
                         if !check_special_cases(&json) {
                             return Ok(PlatformResult {
@@ -283,7 +282,7 @@ async fn check_api_platform(
 // check steam if response > playesrs empty
 fn check_special_cases(json: &Value) -> bool {
     if let Some(players) = json.pointer("/response/players") {
-        return !players.as_array().map_or(false, |o| o.is_empty());
+        return !players.as_array().is_some_and(|o| o.is_empty());
     }
     true
 }
@@ -324,9 +323,7 @@ fn print_report(report: &UsernameReport) {
                         } else if !s.is_empty() {
                             println!("     {}: {}...", key, &s[..47].dimmed());
                         }
-                    } else if value.is_number() {
-                        println!("     {}: {}", key, value);
-                    } else if value.is_boolean() {
+                    } else if value.is_number() || value.is_boolean() {
                         println!("     {}: {}", key, value);
                     }
                 }
@@ -336,4 +333,3 @@ fn print_report(report: &UsernameReport) {
         }
     }
 }
-

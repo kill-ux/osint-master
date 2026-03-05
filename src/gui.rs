@@ -79,7 +79,7 @@ impl Sandbox for OsintGui {
                 if !self.input.is_empty() {
                     self.is_loading = true;
                     self.output = "⏳ Processing your search...".to_string();
-                    let result = execute_search(&self.input.trim(), self.query_type);
+                    let result = execute_search(self.input.trim(), self.query_type);
                     self.output = result;
                     self.is_loading = false;
                 }
@@ -235,14 +235,13 @@ fn execute_search(target: &str, query_type: QueryType) -> String {
 
 fn get_osintmaster_path() -> PathBuf {
     // Try current exe directory first
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(dir) = exe_path.parent() {
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(dir) = exe_path.parent() {
             let candidate = dir.join("osintmaster");
             if candidate.exists() {
                 return candidate;
             }
         }
-    }
     // Fall back to PATH
     PathBuf::from("osintmaster")
 }

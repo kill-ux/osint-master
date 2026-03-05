@@ -367,7 +367,7 @@ pub async fn enumerate_subdomains(
                 if clean_name.ends_with(domain) {
                     domain_to_certs
                         .entry(clean_name.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(issuance.clone());
 
                     if clean_name != domain {
@@ -458,7 +458,7 @@ pub async fn enumerate_subdomains(
 
             let signature = if let Some(pubkey) = &cert.pubkey {
                 if pubkey.key_type == "ecdsa" {
-                    format!("ecdsa (P-256)") // or extract actual curve from cert
+                    "ecdsa (P-256)".to_string() // or extract actual curve from cert
                 } else {
                     format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
                 }

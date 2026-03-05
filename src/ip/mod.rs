@@ -159,9 +159,10 @@ pub fn print_report(report: &IpReport) {
 
         // 2. Location
         println!(
-            "{} {}",
+            "{} {}, {}",
             "Location:".cyan().bold(),
-            format!("{}, {}", details.city, details.country.bold())
+            details.city,
+            details.country.bold()
         );
 
         println!("{} {}", "Region:".cyan().bold(), details.region_name.bold());
