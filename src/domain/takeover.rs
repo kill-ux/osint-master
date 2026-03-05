@@ -146,15 +146,15 @@ pub struct SubdomainInfo {
 struct CertSpotterIssuance {
     id: String,
     dns_names: Option<Vec<String>>,
-    _not_before: String,
+    not_before: String,
     not_after: String,
     issuer: Option<IssuerInfo>,
-    _revoked: Option<bool>,
+    revoked: Option<bool>,
     #[serde(default)]
-    _revocation: Option<RevocationInfo>,
+    revocation: Option<RevocationInfo>,
     #[serde(default)]
     pubkey: Option<PubKeyInfo>,
-    _cert_der: Option<String>,
+    cert_der: Option<String>,
     tbs_sha256: Option<String>,
 }
 
