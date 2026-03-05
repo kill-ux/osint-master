@@ -155,6 +155,35 @@ Contributions and enhancements are welcome via pull requests.
 
 ---
 
+### 🖥️ Graphical User Interface (GUI)
+
+A modern, responsive GUI built with [Iced](https://iced.rs/) provides an elegant user-friendly interface for OSINT lookups with professional styling and smooth interactions.
+
+**Features:**
+- Clean, organized layout with all controls visible at once
+- Dropdown selector for query type (IP Address, Domain, Username)
+- Real-time input field with helpful placeholder text
+- Search and clear buttons for quick actions
+- Scrollable output panel for viewing large result sets
+- Modern styling with professional appearance
+
+**Building & Running:**
+
+```sh
+# build both binaries
+cargo build --release
+
+# run the GUI version
+cargo run --bin osintmaster-gui --release
+
+# or directly execute the binary
+./target/release/osintmaster-gui
+```
+
+The GUI launches the `osintmaster` CLI binary as a subprocess; ensure it's available in the same directory or in your `$PATH` for the application to function properly.
+
+---
+
 Feel free to contact the maintainers for questions or report issues on the GitHub repository.
 
 ---
