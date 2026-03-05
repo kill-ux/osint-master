@@ -1,13 +1,8 @@
-use std::process::exit;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use osint_master::{
     Cli, Commands,
-    domain::{
-        enumerate_subdomains, run_domain_lookup,
-        takeover::{self, run_domain_lookup_sslmate},
-    },
+    domain::{run_domain_lookup, takeover::run_domain_lookup_sslmate},
     ip::run_ip_lookup,
     username::run_username_lookup,
 };
@@ -21,7 +16,10 @@ async fn main() -> Result<()> {
         Commands::User { name } => run_username_lookup(name, cli.output).await,
         Commands::Domain { name } => {
             match run_domain_lookup_sslmate(name.clone(), cli.output.clone(), 50).await {
-                Err(_) => run_domain_lookup(name.clone(), cli.output, 1).await,
+                Err(err) => {
+                    eprintln!("Error with SSLMate: {err}");
+                    run_domain_lookup(name.clone(), cli.output, 1).await
+                },
                 _ => Ok(()),
             }
         }

@@ -1,101 +1,436 @@
 [
     {
         "name": "GitHub",
-        "url": "https://api.github.com/users/{}",
-        "platform_type": "api",
-        "not_found_indicators": ["Not Found"],
+        "url": "https://api.github.com/users/{username}",
+        "not_found_indicators": [
+            "Not Found"
+        ],
         "profile_fields": [
-            {"name": "login", "path": "/login"},
-            {"name": "name", "path": "/name"},
-            {"name": "company", "path": "/company"},
-            {"name": "location", "path": "/location"},
-            {"name": "email", "path": "/email"},
-            {"name": "bio", "path": "/bio"},
-            {"name": "followers", "path": "/followers"},
-            {"name": "following", "path": "/following"},
-            {"name": "public_repos", "path": "/public_repos"},
-            {"name": "public_gists", "path": "/public_gists"},
-            {"name": "created_at", "path": "/created_at"},
-            {"name": "updated_at", "path": "/updated_at"},
-            {"name": "twitter_username", "path": "/twitter_username"},
-            {"name": "blog", "path": "/blog"},
-            {"name": "hireable", "path": "/hireable"},
-            {"name": "avatar_url", "path": "/avatar_url"},
-            {"name": "html_url", "path": "/html_url"}
+            {
+                "name": "login",
+                "path": "/login"
+            },
+            {
+                "name": "name",
+                "path": "/name"
+            },
+            {
+                "name": "company",
+                "path": "/company"
+            },
+            {
+                "name": "location",
+                "path": "/location"
+            },
+            {
+                "name": "email",
+                "path": "/email"
+            },
+            {
+                "name": "bio",
+                "path": "/bio"
+            },
+            {
+                "name": "followers",
+                "path": "/followers"
+            },
+            {
+                "name": "following",
+                "path": "/following"
+            },
+            {
+                "name": "public_repos",
+                "path": "/public_repos"
+            },
+            {
+                "name": "public_gists",
+                "path": "/public_gists"
+            },
+            {
+                "name": "created_at",
+                "path": "/created_at"
+            },
+            {
+                "name": "updated_at",
+                "path": "/updated_at"
+            },
+            {
+                "name": "twitter_username",
+                "path": "/twitter_username"
+            },
+            {
+                "name": "blog",
+                "path": "/blog"
+            },
+            {
+                "name": "hireable",
+                "path": "/hireable"
+            },
+            {
+                "name": "avatar_url",
+                "path": "/avatar_url"
+            },
+            {
+                "name": "html_url",
+                "path": "/html_url"
+            }
         ]
     },
     {
         "name": "GitLab",
-        "url": "https://gitlab.com/api/v4/users?username={}",
-        "platform_type": "api",
-        "not_found_indicators": ["[]"],
+        "url": "https://gitlab.com/api/v4/users?username={username}",
+        "not_found_indicators": [
+            "[]"
+        ],
         "profile_fields": [
-            {"name": "name", "path": "/0/name"},
-            {"name": "bio", "path": "/0/bio"},
-            {"name": "followers", "path": "/0/followers"},
-            {"name": "username", "path": "/0/username"},
-            {"name": "id", "path": "/0/id"},
-            {"name": "public_email", "path": "/0/public_email"},
-            {"name": "state", "path": "/0/state"},
-            {"name": "locked", "path": "/0/locked"},
-            {"name": "avatar_url", "path": "/0/avatar_url"},
-            {"name": "web_url", "path": "/0/web_url"},
-            {"name": "location", "path": "/0/location"},
-            {"name": "created_at", "path": "/0/created_at"},
-            {"name": "updated_at", "path": "/0/updated_at"}
+            {
+                "name": "name",
+                "path": "/0/name"
+            },
+            {
+                "name": "bio",
+                "path": "/0/bio"
+            },
+            {
+                "name": "followers",
+                "path": "/0/followers"
+            },
+            {
+                "name": "username",
+                "path": "/0/username"
+            },
+            {
+                "name": "id",
+                "path": "/0/id"
+            },
+            {
+                "name": "public_email",
+                "path": "/0/public_email"
+            },
+            {
+                "name": "state",
+                "path": "/0/state"
+            },
+            {
+                "name": "locked",
+                "path": "/0/locked"
+            },
+            {
+                "name": "avatar_url",
+                "path": "/0/avatar_url"
+            },
+            {
+                "name": "web_url",
+                "path": "/0/web_url"
+            },
+            {
+                "name": "location",
+                "path": "/0/location"
+            },
+            {
+                "name": "created_at",
+                "path": "/0/created_at"
+            },
+            {
+                "name": "updated_at",
+                "path": "/0/updated_at"
+            }
         ]
     },
     {
         "name": "Reddit",
-        "url": "https://www.reddit.com/user/{}/about.json",
-        "platform_type": "api",
-        "not_found_indicators": ["404"],
+        "url": "https://www.reddit.com/user/{username}/about.json",
+        "not_found_indicators": [
+            "404"
+        ],
         "profile_fields": [
-
-            {"name": "username", "path": "/data/name"},
-            {"name": "created_utc", "path": "/data/created_utc"},
-            {"name": "total_karma", "path": "/data/total_karma"},
-            {"name": "link_karma", "path": "/data/link_karma"},
-            {"name": "comment_karma", "path": "/data/comment_karma"},
-            {"name": "followers", "path": "/data/subreddit/subscribers"},
-            {"name": "bio", "path": "/data/subreddit/public_description"},
-            {"name": "is_gold", "path": "/data/is_gold"},
-            {"name": "is_mod", "path": "/data/is_mod"},
-            {"name": "avatar", "path": "/data/icon_img"},
-            {"name": "profile_url", "path": "/data/profile_url"}
+            {
+                "name": "username",
+                "path": "/data/name"
+            },
+            {
+                "name": "created_utc",
+                "path": "/data/created_utc"
+            },
+            {
+                "name": "total_karma",
+                "path": "/data/total_karma"
+            },
+            {
+                "name": "link_karma",
+                "path": "/data/link_karma"
+            },
+            {
+                "name": "comment_karma",
+                "path": "/data/comment_karma"
+            },
+            {
+                "name": "followers",
+                "path": "/data/subreddit/subscribers"
+            },
+            {
+                "name": "bio",
+                "path": "/data/subreddit/public_description"
+            },
+            {
+                "name": "is_gold",
+                "path": "/data/is_gold"
+            },
+            {
+                "name": "is_mod",
+                "path": "/data/is_mod"
+            },
+            {
+                "name": "avatar",
+                "path": "/data/icon_img"
+            },
+            {
+                "name": "profile_url",
+                "path": "/data/profile_url"
+            }
         ]
     },
     {
         "name": "HackerNews",
-        "url": "https://hacker-news.firebaseio.com/v0/user/{}.json",
-        "platform_type": "api",
-        "not_found_indicators": ["null"],
+        "url": "https://hacker-news.firebaseio.com/v0/user/{username}.json",
+        "not_found_indicators": [
+            "null"
+        ],
         "profile_fields": [
-            {"name": "id", "path": "/id"},
-            {"name": "karma", "path": "/karma"},
-            {"name": "created", "path": "/created"}
+            {
+                "name": "id",
+                "path": "/id"
+            },
+            {
+                "name": "karma",
+                "path": "/karma"
+            },
+            {
+                "name": "created",
+                "path": "/created"
+            }
         ]
     },
     {
-        "name": "Twitter (via Nitter)",
-        "url": "https://nitter.net/{}",
-        "platform_type": "web",
-        "not_found_indicators": ["This account doesn't exist", "page doesn't exist"],
-        "profile_fields": []
+        "name": "Mastodon",
+        "url": "https://mastodon.social/api/v1/accounts/lookup?acct={username}",
+        "not_found_indicators": [
+            "Record not found"
+        ],
+        "profile_fields": [
+            {
+                "name": "display_name",
+                "path": "/display_name"
+            },
+            {
+                "name": "username",
+                "path": "/username"
+            },
+            {
+                "name": "bio",
+                "path": "/note"
+            },
+            {
+                "name": "followers",
+                "path": "/followers_count"
+            },
+            {
+                "name": "following",
+                "path": "/following_count"
+            },
+            {
+                "name": "posts",
+                "path": "/statuses_count"
+            },
+            {
+                "name": "avatar",
+                "path": "/avatar"
+            },
+            {
+                "name": "created_at",
+                "path": "/created_at"
+            }
+        ]
     },
     {
         "name": "Steam",
-        "url": "https://steamcommunity.com/id/{}/?xml=1",
-        "platform_type": "api",
-        "not_found_indicators": ["The specified profile could not be found"],
+        "url": "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={key}&steamids={id}",
+        "pre_process": {
+            "url": "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={key}&vanityurl={username}",
+            "response_path": "/response/steamid",
+            "not_found_indicators": [
+                "The specified profile could not be found"
+            ]
+        },
+        "pre_url": "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={key}&vanityurl={username}",
+        "api_key": "STEAM_API_KEY",
+        "not_found_indicators": [
+            "The specified profile could not be found"
+        ],
         "profile_fields": [
-            {"name": "username", "path": "/profile/steamID"},
-            {"name": "real_name", "path": "/profile/realname"},
-            {"name": "location", "path": "/profile/location"},
-            {"name": "summary", "path": "/profile/summary"},
-            {"name": "avatar", "path": "/profile/avatarFull"},
-            {"name": "joined", "path": "/profile/joinedDate"},
-            {"name": "online_status", "path": "/profile/onlineState"}
+            {
+                "name": "steamid",
+                "path": "/response/players/0/steamid"
+            },
+            {
+                "name": "personaname",
+                "path": "/response/players/0/personaname"
+            },
+            {
+                "name": "profileurl",
+                "path": "/response/players/0/profileurl"
+            },
+            {
+                "name": "avatar",
+                "path": "/response/players/0/avatarfull"
+            },
+            {
+                "name": "realname",
+                "path": "/response/players/0/realname"
+            },
+            {
+                "name": "timecreated",
+                "path": "/response/players/0/timecreated"
+            },
+            {
+                "name": "loccountrycode",
+                "path": "/response/players/0/loccountrycode"
+            },
+            {
+                "name": "locstatecode",
+                "path": "/response/players/0/locstatecode"
+            },
+            {
+                "name": "personastate",
+                "path": "/response/players/0/personastate"
+            },
+            {
+                "name": "communityvisibilitystate",
+                "path": "/response/players/0/communityvisibilitystate"
+            }
+        ]
+    },
+    {
+        "name": "codeberg",
+        "url": "https://codeberg.org/api/v1/users/{username}",
+        "not_found_indicators": [
+            "404"
+        ],
+        "profile_fields": [
+            {
+                "name": "id",
+                "path": "/id"
+            },
+            {
+                "name": "login",
+                "path": "/login"
+            },
+            {
+                "name": "full_name",
+                "path": "/full_name"
+            },
+            {
+                "name": "email",
+                "path": "/email"
+            },
+            {
+                "name": "avatar_url",
+                "path": "/avatar_url"
+            },
+            {
+                "name": "html_url",
+                "path": "/html_url"
+            },
+            {
+                "name": "location",
+                "path": "/location"
+            },
+            {
+                "name": "pronouns",
+                "path": "/pronouns"
+            },
+            {
+                "name": "website",
+                "path": "/website"
+            },
+            {
+                "name": "description",
+                "path": "/description"
+            },
+            {
+                "name": "visibility",
+                "path": "/visibility"
+            },
+            {
+                "name": "followers_count",
+                "path": "/followers_count"
+            },
+            {
+                "name": "following_count",
+                "path": "/following_count"
+            },
+            {
+                "name": "starred_repos_count",
+                "path": "/starred_repos_count"
+            }
+        ]
+    },
+    {
+        "name": "LinkedIn",
+        "url": "https://api.linkedin.com/v2/people/(id:{id})",
+        "api_key": "LINKEDIN_API_KEY",
+        "not_found_indicators": [
+            "404"
+        ],
+        "profile_fields": [
+            {
+                "name": "id",
+                "path": "/id"
+            },
+            {
+                "name": "firstName",
+                "path": "/firstName/localized/en_US"
+            },
+            {
+                "name": "lastName",
+                "path": "/lastName/localized/en_US"
+            },
+            {
+                "name": "profilePicture",
+                "path": "/profilePicture/displayImage~"
+            },
+            {
+                "name": "headline",
+                "path": "/headline/localized/en_US"
+            },
+            {
+                "name": "location",
+                "path": "/locationName"
+            },
+            {
+                "name": "industry",
+                "path": "/industryName"
+            },
+            {
+                "name": "summary",
+                "path": "/summary/localized/en_US"
+            },
+            {
+                "name": "numConnections",
+                "path": "/numConnections"
+            },
+            {
+                "name": "numConnectionsCapped",
+                "path": "/numConnectionsCapped"
+            },
+            {
+                "name": "vanityName",
+                "path": "/vanityName"
+            },
+            {
+                "name": "publicProfileUrl",
+                "path": "/publicProfileUrl"
+            }
         ]
     }
 ]

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Result, bail};
 use base64::{Engine, engine::general_purpose};
@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 pub mod takeover;
 pub use takeover::*;
 
-pub async fn run_domain_lookup(target: String, output: Option<String>, mut threads: usize) -> Result<()> {
+pub async fn run_domain_lookup(
+    target: String,
+    output: Option<String>,
+    mut threads: usize,
+) -> Result<()> {
     threads = threads.max(1);
     println!("Searching Domain: {}", target);
     println!(
@@ -34,7 +38,7 @@ struct CrtShEntry {
 }
 
 pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioRuntime>>;
-pub async fn run_ctr_sh(target: &str, output: Option<String>,threads: usize) -> Result<()> {
+pub async fn run_ctr_sh(target: &str, output: Option<String>, threads: usize) -> Result<()> {
     let client = Client::new();
     let url = format!("https://crt.sh/?q=.{}&output=json", target);
     let res = client.get(url).send().await?;
@@ -84,11 +88,13 @@ pub async fn run_ctr_sh(target: &str, output: Option<String>,threads: usize) -> 
         let client_ptr = client.clone();
         let permit_limit = semaphore.clone();
         set.spawn(async move {
-            let _permit= permit_limit.acquire().await;
-            let mut info = SubdomainInfo::default();
-            info.domain = cert.name_value.clone();
-            info.record_type = "NXDOMAIN".to_string();
-            info.cert_id = cert.id;
+            let _permit = permit_limit.acquire().await;
+            let mut info = SubdomainInfo {
+                domain: cert.name_value.clone(),
+                record_type: "NXDOMAIN".to_string(),
+                cert_id: cert.id,
+                ..SubdomainInfo::default()
+            };
 
             if let Ok(mut ips) = lookup_host(&info.domain)
                 && let Some(ip) = ips.next()
@@ -114,7 +120,8 @@ pub async fn run_ctr_sh(target: &str, output: Option<String>,threads: usize) -> 
         }
     }
 
-    pretty_print(domins, output).await?;
+    // use the shared report printer
+    print_report(domins, output).await?;
 
     Ok(())
 }
@@ -172,9 +179,7 @@ mod crt_sh_date_format {
     }
 }
 
-use tokio::{
-    fs::{File, create_dir_all}, io::AsyncWriteExt, sync::Semaphore, task::JoinSet
-};
+use tokio::{sync::Semaphore, task::JoinSet};
 use tracing::warn;
 use trust_dns_resolver::{
     AsyncResolver, TokioAsyncResolver,
@@ -210,10 +215,10 @@ pub async fn get_cert_details_binary(info: &mut SubdomainInfo, client: Arc<Clien
         info.expiry = expiry;
     }
 
-    if let Ok(expiry_date) = DateTime::parse_from_rfc2822(&info.expiry) {
-        if expiry_date < Utc::now() {
-            add_vuln(info, "EXPIRED_CERTIFICATE");
-        }
+    if let Ok(expiry_date) = DateTime::parse_from_rfc2822(&info.expiry)
+        && expiry_date < Utc::now()
+    {
+        add_vuln(info, "EXPIRED_CERTIFICATE");
     }
 
     info.issuer = issuer;
@@ -243,7 +248,7 @@ pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
             for provider in vulnerable_providers {
                 if cname.contains(provider) {
                     // It points to a cloud service. Is that service actually alive?
-                    if let Some(_) = &info.ip {
+                    if info.ip.is_some() {
                         add_vuln(info, &format!("CRITICAL: Dangling CNAME to {}", provider));
                     }
                 }
@@ -278,7 +283,11 @@ pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<S
     bail!("Error: Can't resolve cname".to_string());
 }
 
-pub async fn pretty_print(domins: Vec<SubdomainInfo>, output: Option<String>) -> Result<()> {
+/// Shared printing routine for domain subdomain results.  This
+/// replaces the previous `pretty_print` helper and is used by both the
+/// normal lookup (`run_ctr_sh`) and the SSLMate takeover workflow.  It
+/// optionally persists the data when an output path is provided.
+pub async fn print_report(domins: Vec<SubdomainInfo>, output: Option<String>) -> Result<()> {
     println!(
         "\n{} {}",
         "✔".green().bold(),
@@ -335,35 +344,8 @@ pub async fn pretty_print(domins: Vec<SubdomainInfo>, output: Option<String>) ->
 
     // --- FILE STATUS ---
     if let Some(path) = output {
-        save_report(&path, domins).await?;
+        crate::report::save_report(&path, &domins).await?;
     }
 
-    Ok(())
-}
-
-pub async fn save_report(path: &str, domins: Vec<SubdomainInfo>) -> Result<()> {
-    let res = if path.ends_with("json") {
-        serde_json::to_string_pretty(&domins)?
-    } else {
-        serde_txtrecord::to_txt_records(&domins)?
-            .into_iter()
-            .map(|(key, value)| format!("{}: {}", key.to_uppercase(), value))
-            .collect::<Vec<String>>()
-            .join("\n")
-    };
-    let path = Path::new(path);
-    if let Some(parent) = path.parent()
-        && parent.to_str() != Some("")
-    {
-        warn!("Directory dosn't exist will be created");
-        create_dir_all(parent).await?;
-    }
-    let mut fd = File::create(path).await?;
-    fd.write_all(res.as_bytes()).await?;
-    println!(
-        "{} {}",
-        "Data successfully saved to:".green(),
-        Path::new(path).to_string_lossy()
-    );
     Ok(())
 }

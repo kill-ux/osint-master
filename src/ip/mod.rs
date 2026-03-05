@@ -1,7 +1,7 @@
 pub mod dns;
 pub mod models;
 
-use std::{env, path::Path};
+use std::env;
 
 use anyhow::{Context, Result, bail};
 use colored::Colorize;
@@ -10,11 +10,6 @@ use reqwest::Client;
 
 use dns::*;
 use models::*;
-use tokio::{
-    fs::{File, create_dir_all},
-    io::AsyncWriteExt,
-};
-use tracing::warn;
 use whois_rust::{WhoIs, WhoIsLookupOptions};
 
 pub const IP_API_FIELDS: usize = 454553599;
@@ -49,7 +44,7 @@ pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()>
 
     print_report(&report);
     if let Some(ref path) = output {
-        save_report(path, &report).await?;
+        crate::report::save_report(path, &report).await?;
     }
 
     println!(
@@ -134,33 +129,6 @@ async fn fetch_data_with_retry(ip: &str, max_retries: u32) -> Result<IpReport> {
     bail!("Failed after {} retries", max_retries)
 }
 
-pub async fn save_report(path: &str, report: &models::IpReport) -> Result<()> {
-    let res = if path.ends_with("json") {
-        serde_json::to_string_pretty(report)?
-    } else {
-        serde_txtrecord::to_txt_records(report)?
-            .into_iter()
-            .map(|(key, value)| format!("{}: {}", key.to_uppercase(), value))
-            .collect::<Vec<String>>()
-            .join("\n")
-    };
-    let path = Path::new(path);
-    if let Some(parent) = path.parent()
-        && parent.to_str() != Some("")
-    {
-        warn!("Directory dosn't exist will be created");
-        create_dir_all(parent).await?;
-    }
-    let mut fd = File::create(path).await?;
-    fd.write_all(res.as_bytes()).await?;
-    println!(
-        "{} {}",
-        "Data successfully saved to:".green(),
-        Path::new(path).to_string_lossy()
-    );
-    Ok(())
-}
-
 pub fn print_report(report: &IpReport) {
     if let Some(details) = &report.details {
         println!("{}", "─".repeat(60).bold());
@@ -191,9 +159,10 @@ pub fn print_report(report: &IpReport) {
 
         // 2. Location
         println!(
-            "{} {}",
+            "{} {}, {}",
             "Location:".cyan().bold(),
-            format!("{}, {}", details.city, details.country.bold())
+            details.city,
+            details.country.bold()
         );
 
         println!("{} {}", "Region:".cyan().bold(), details.region_name.bold());

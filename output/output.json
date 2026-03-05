@@ -1,0 +1,82 @@
+{
+  "username": "yelasri",
+  "total_checked": 8,
+  "total_found": 1,
+  "platforms": [
+    {
+      "url": "https://api.github.com/users/yelasri",
+      "name": "GitHub",
+      "found": true,
+      "profile": {
+        "avatar_url": "https://avatars.githubusercontent.com/u/24477763?v=4",
+        "bio": null,
+        "blog": "",
+        "company": null,
+        "created_at": "2016-12-09T14:07:04Z",
+        "email": null,
+        "followers": 0,
+        "following": 0,
+        "hireable": null,
+        "html_url": "https://github.com/yelasri",
+        "location": null,
+        "login": "yelasri",
+        "name": null,
+        "public_gists": 0,
+        "public_repos": 0,
+        "twitter_username": null,
+        "updated_at": "2016-12-09T14:07:04Z"
+      },
+      "error": null
+    },
+    {
+      "url": "https://gitlab.com/api/v4/users?username=yelasri",
+      "name": "GitLab",
+      "found": false,
+      "profile": null,
+      "error": "Empty or invalid JSON response"
+    },
+    {
+      "url": "https://hacker-news.firebaseio.com/v0/user/yelasri.json",
+      "name": "HackerNews",
+      "found": false,
+      "profile": null,
+      "error": "Empty or invalid JSON response"
+    },
+    {
+      "url": "https://api.linkedin.com/v2/people/(id:{id})",
+      "name": "LinkedIn",
+      "found": false,
+      "profile": null,
+      "error": "HTTP 401 Unauthorized"
+    },
+    {
+      "url": "https://mastodon.social/api/v1/accounts/lookup?acct=yelasri",
+      "name": "Mastodon",
+      "found": false,
+      "profile": null,
+      "error": null
+    },
+    {
+      "url": "https://www.reddit.com/user/yelasri/about.json",
+      "name": "Reddit",
+      "found": false,
+      "profile": null,
+      "error": null
+    },
+    {
+      "url": "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=26ABB7D377F2791702CCFCFA9E42A0EA&steamids={id}",
+      "name": "Steam",
+      "found": false,
+      "profile": null,
+      "error": "Special case check failed"
+    },
+    {
+      "url": "https://codeberg.org/api/v1/users/yelasri",
+      "name": "codeberg",
+      "found": false,
+      "profile": null,
+      "error": null
+    }
+  ],
+  "scan_time": "2026-03-05T10:04:31.753227908+00:00"
+}

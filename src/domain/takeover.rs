@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
     sync::Arc,
     time::Duration,
 };
@@ -11,17 +10,15 @@ use colored::Colorize;
 use dns_lookup::lookup_host;
 use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use reqwest::{Client, header::AUTHORIZATION};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tokio::{
-    fs::{File, create_dir_all},
-    io::AsyncWriteExt,
     sync::Semaphore,
     task::JoinSet,
     time::timeout,
 };
 use tracing::warn;
 use trust_dns_resolver::{
-    AsyncResolver, TokioAsyncResolver,
+    AsyncResolver,
     error::{ResolveError, ResolveErrorKind},
     name_server::{GenericConnection, GenericConnectionProvider, TokioRuntime},
     proto::rr::RecordType,
@@ -126,35 +123,27 @@ pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioR
 
 // ==================== DATA STRUCTURES ====================
 
-#[derive(Debug, Default, Serialize, Clone)]
-pub struct SubdomainInfo {
-    pub domain: String,
-    pub ip: Option<String>,
-    pub record_type: String,
-    pub issuer: String,
-    pub cert_id: u64,
-    pub expiry: String,
-    pub version: String,
-    pub serial: String,
-    pub signature: String,
-    pub vulnerability: String,
-}
+// Reuse the `SubdomainInfo` struct defined in the parent `domain` module
+// rather than duplicating it here.  This avoids type drift and allows the
+// shared printing/save helpers to operate on the same data type.
+use super::SubdomainInfo;  
 
 // ==================== SSLMATE API STRUCTS ====================
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 struct CertSpotterIssuance {
     id: String,
     dns_names: Option<Vec<String>>,
-    _not_before: String,
+    not_before: String,
     not_after: String,
     issuer: Option<IssuerInfo>,
-    _revoked: Option<bool>,
+    revoked: Option<bool>,
     #[serde(default)]
-    _revocation: Option<RevocationInfo>,
+    revocation: Option<RevocationInfo>,
     #[serde(default)]
     pubkey: Option<PubKeyInfo>,
-    _cert_der: Option<String>,
+    cert_der: Option<String>,
     tbs_sha256: Option<String>,
 }
 
@@ -164,6 +153,7 @@ struct IssuerInfo {
     name: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 struct RevocationInfo {
     #[serde(default, deserialize_with = "deserialize_reason")]
@@ -377,7 +367,7 @@ pub async fn enumerate_subdomains(
                 if clean_name.ends_with(domain) {
                     domain_to_certs
                         .entry(clean_name.clone())
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(issuance.clone());
 
                     if clean_name != domain {
@@ -468,7 +458,7 @@ pub async fn enumerate_subdomains(
 
             let signature = if let Some(pubkey) = &cert.pubkey {
                 if pubkey.key_type == "ecdsa" {
-                    format!("ecdsa (P-256)") // or extract actual curve from cert
+                    "ecdsa (P-256)".to_string() // or extract actual curve from cert
                 } else {
                     format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
                 }
@@ -524,88 +514,6 @@ pub async fn enumerate_subdomains(
     Ok(results)
 }
 
-// ==================== REPORT GENERATION ====================
-
-pub fn print_report(results: &[SubdomainInfo]) {
-    println!(
-        "\n{} {}",
-        "✔".green().bold(),
-        format!("Subdomains found: {}", results.len()).bold()
-    );
-
-    let mut vulnerabilities = Vec::new();
-
-    for info in results {
-        let status_icon = if info.ip.is_some() {
-            "●".green()
-        } else {
-            "○".red()
-        };
-
-        println!(
-            "  {} {} ({})",
-            status_icon,
-            info.domain.bright_white().bold(),
-            info.ip.as_deref().unwrap_or("No IP").dimmed()
-        );
-
-        if !info.expiry.is_empty() {
-            if info.vulnerability.contains("EXPIRED") {
-                println!("    {} {}", "▓ SSL:".yellow(), info.expiry.red());
-            } else {
-                println!("    {} {}", "▓ SSL:".cyan(), info.expiry.dimmed());
-            }
-        }
-
-        if !info.vulnerability.is_empty() {
-            vulnerabilities.push(info.clone());
-        }
-    }
-
-    if !vulnerabilities.is_empty() {
-        println!(
-            "\n{}",
-            "❗ Potential Vulnerabilities & Risks:"
-                .on_red()
-                .black()
-                .bold()
-        );
-        for vuln in vulnerabilities {
-            println!("  → {}", vuln.domain.bright_white());
-            println!("    {}", vuln.vulnerability.yellow().italic());
-        }
-    }
-}
-
-pub async fn save_report(path: &str, results: &[SubdomainInfo]) -> Result<()> {
-    let res = if path.ends_with("json") {
-        serde_json::to_string_pretty(results)?
-    } else {
-        // Simple text format as fallback
-        results
-            .iter()
-            .map(|r| format!("{}: {}", r.domain, r.ip.as_deref().unwrap_or("No IP")))
-            .collect::<Vec<String>>()
-            .join("\n")
-    };
-
-    let path = Path::new(path);
-    if let Some(parent) = path.parent()
-        && parent.to_str() != Some("")
-    {
-        create_dir_all(parent).await?;
-    }
-
-    let mut fd = File::create(path).await?;
-    fd.write_all(res.as_bytes()).await?;
-    println!(
-        "{} {}",
-        "Data successfully saved to:".green(),
-        path.to_string_lossy()
-    );
-    Ok(())
-}
-
 // ==================== MAIN FUNCTION ====================
 
 pub async fn run_domain_lookup_sslmate(
@@ -620,11 +528,8 @@ pub async fn run_domain_lookup_sslmate(
 
     let results = enumerate_subdomains(&target, &sslmate_key, threads).await?;
 
-    print_report(&results);
-
-    if let Some(path) = output {
-        save_report(&path, &results).await?;
-    }
+    // use the shared printer defined in the parent module
+    super::print_report(results, output).await?;
 
     Ok(())
 }
