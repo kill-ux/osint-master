@@ -2,7 +2,6 @@ use std::{env, sync::Arc};
 
 use anyhow::Result;
 use dotenvy::dotenv;
-use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -83,7 +82,7 @@ pub async fn run_username_lookup(username: String, output: Option<String>) -> Re
 
     // Save to file if output specified
     if let Some(path) = output {
-        save_report(&path, &results).await?;
+        crate::report::save_report(&path, &results).await?;
     }
 
     Ok(())
@@ -169,22 +168,19 @@ async fn check_api_platform(
     client: &Client,
     pre_process: Option<PreProcess>,
 ) -> Result<PlatformResult> {
-    let mut api_key = None;
     let mut pre_process = pre_process.clone();
     let mut url = url.to_string();
 
     if let Some(api_key_name) = &platform.api_key {
         dotenv().ok();
-        api_key = env::var(api_key_name).ok();
-        if let Some(key) = &api_key {
+        if let Ok(key) = env::var(api_key_name) {
             pre_process
                 .as_mut()
-                .map(|p| p.url = p.url.replace("{key}", key));
-            url = url.replace("{key}", key);
+                .map(|p| p.url = p.url.replace("{key}", &key));
+            url = url.replace("{key}", &key);
         }
     }
 
-    let mut url = url.to_string();
     if let Some(p) = pre_process
         && let Some(id) = check_pre_url(p, client).await?
     {
@@ -341,9 +337,3 @@ fn print_report(report: &UsernameReport) {
     }
 }
 
-async fn save_report(path: &str, report: &UsernameReport) -> Result<()> {
-    let json = serde_json::to_string_pretty(report)?;
-    tokio::fs::write(path, json).await?;
-    println!("\n✅ Report saved to: {}", path);
-    Ok(())
-}

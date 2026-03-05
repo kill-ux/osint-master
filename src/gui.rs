@@ -1,4 +1,4 @@
-use iced::widget::{button, column, container, pick_list, row, scrollable, text, text_input};
+use iced::widget::{button, column, container, row, scrollable, text, text_input};
 use iced::{Alignment, Element, Length, Sandbox, Settings, Theme};
 use std::path::PathBuf;
 use std::process::Command;
@@ -15,7 +15,6 @@ pub enum QueryType {
 }
 
 impl QueryType {
-    const ALL: &'static [QueryType] = &[QueryType::IP, QueryType::Domain, QueryType::Username];
 }
 
 impl std::fmt::Display for QueryType {
@@ -92,7 +91,7 @@ impl Sandbox for OsintGui {
         }
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         let title = text("OSINT Master")
             .size(28);
         let subtitle = text("Intelligence Gathering Tool")
