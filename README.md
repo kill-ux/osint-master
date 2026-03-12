@@ -1175,6 +1175,7 @@ cargo run --bin osintmaster-gui --release
 
 # or directly execute the binary
 ./target/release/osintmaster-gui
+
 ```
 
 The GUI launches the `osintmaster` CLI binary as a subprocess; ensure it's available in the same directory or in your `$PATH` for the application to function properly.
