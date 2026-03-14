@@ -35,11 +35,24 @@ pub async fn run_ip_lookup(target: String, output: Option<String>) -> Result<()>
 
     let mut report = fetch_data(ip_str).await?;
     let info = fetch_whois(ip_str).await?;
+    
+    // Add timestamp
+    if let Some(ref mut details) = report.details {
+        details.last_updated = Some(chrono::Local::now().to_rfc3339());
+    }
+    
     report.additional_data = Some(info);
 
     if let Ok(abuse_data) = check_abuse_status(&ip, &api_key).await {
         report.abuse_score = Some(abuse_data.abuse_confidence_score);
         report.total_reports = Some(abuse_data.total_reports);
+    }
+
+    // Fetch historical data (non-critical - won't fail the entire lookup)
+    if let Ok(history) = fetch_historical_data(&ip, &api_key).await {
+        if !history.is_empty() {
+            report.historical_data = Some(history);
+        }
     }
 
     print_report(&report);
@@ -86,6 +99,80 @@ pub async fn fetch_whois(ip: &str) -> Result<WhoisInfo> {
 
     // println!("WHOIS text:\n{}", text);
     Ok(info)
+}
+
+pub async fn fetch_historical_data(ip: &str, api_key: &str) -> Result<Vec<models::HistoricalEvent>> {
+    let client = Client::new();
+    let url = format!(
+        "https://api.abuseipdb.com/api/v2/reports?ipAddress={}&maxAgeInDays=90",
+        ip
+    );
+
+    println!("{url}");
+
+    let res = client
+        .get(&url)
+        .header("Key", api_key)
+        .header("Accept", "application/json")
+        .send()
+        .await?;
+
+    if !res.status().is_success() {
+        // Return empty history if endpoint fails rather than failing entire lookup
+        return Ok(vec![]);
+    }
+
+    #[derive(serde::Deserialize)]
+    struct HistoricalResponse {
+        data: HistoricalData,
+    }
+
+    #[derive(serde::Deserialize)]
+    #[allow(dead_code)]
+    struct HistoricalData {
+        total: u32,
+        page: u32,
+        count: u32,
+        #[serde(rename = "perPage")]
+        per_page: u32,
+        #[serde(rename = "lastPage")]
+        last_page: u32,
+        #[serde(rename = "nextPageUrl")]
+        next_page_url: Option<String>,
+        #[serde(rename = "previousPageUrl")]
+        previous_page_url: Option<String>,
+        results: Vec<HistoricalReport>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct HistoricalReport {
+        #[serde(rename = "reportedAt")]
+        reported_at: Option<String>,
+        categories: Option<Vec<u32>>,
+        comment: Option<String>,
+    }
+
+    match res.json::<HistoricalResponse>().await {
+        Ok(response) => {
+            let events = response
+                .data
+                .results
+                .into_iter()
+                .map(|r| models::HistoricalEvent {
+                    date: r.reported_at,
+                    isp: None,
+                    country: None,
+                    city: None,
+                    category: r
+                        .categories
+                        .map(|cats| cats.into_iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",")),
+                    comment: r.comment,
+                })
+                .collect();
+            Ok(events)
+        }
+        Err(_) => Ok(vec![]),
+    }
 }
 
 async fn fetch_data_with_retry(ip: &str, max_retries: u32) -> Result<IpReport> {
@@ -196,6 +283,29 @@ pub fn print_report(report: &IpReport) {
             "REPORTS:".cyan().bold(),
             report.total_reports.unwrap_or(0)
         );
+        
+        // 4. Historical Data
+        if let Some(history) = &report.historical_data {
+            if !history.is_empty() {
+                println!("{}", "─".repeat(60).bold());
+                println!("{}", "HISTORICAL ABUSE REPORTS".cyan().bold());
+                println!("{}", "─".repeat(60).bold());
+                for (idx, event) in history.iter().enumerate() {
+                    println!(
+                        "{} {}",
+                        format!("Report {}:", idx + 1).yellow().bold(),
+                        event.date.as_deref().unwrap_or("Unknown date")
+                    );
+                    if let Some(category) = &event.category {
+                        println!("  Category: {}", category);
+                    }
+                    if let Some(comment) = &event.comment {
+                        println!("  Comment: {}", comment);
+                    }
+                }
+            }
+        }
+        
         println!("{}", "─".repeat(60).bold());
     }
 }

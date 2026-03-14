@@ -1,5 +1,15 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct HistoricalEvent {
+    pub date: Option<String>,
+    pub isp: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub category: Option<String>,
+    pub comment: Option<String>,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IpReport {
@@ -14,6 +24,7 @@ pub struct IpReport {
 
     pub abuse_score: Option<u32>,
     pub total_reports: Option<u32>,
+    pub historical_data: Option<Vec<HistoricalEvent>>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -41,6 +52,10 @@ pub struct IpDetails {
     pub mobile: bool,  // Is the user on a cellular network?
     pub proxy: bool,   // Is this a known Proxy, VPN, or Tor node?
     pub hosting: bool, // Is this a Data Center (e.g., AWS/DigitalOcean)?
+
+    // Timestamp
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_updated: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]

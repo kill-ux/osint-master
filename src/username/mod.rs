@@ -193,8 +193,23 @@ async fn check_api_platform(
             let status = resp.status();
 
             if status.is_success() {
+                let text = resp.text().await.unwrap_or_default();
+
+                // Check for not found indicators in the response text
+                let is_not_found = platform.not_found_indicators.iter().any(|indicator| text.contains(indicator));
+
+                if is_not_found {
+                    return Ok(PlatformResult {
+                        url: url.clone(),
+                        name: platform.name.clone(),
+                        found: false,
+                        profile: None,
+                        error: None,
+                    });
+                }
+
                 // Try to parse JSON
-                match resp.json::<serde_json::Value>().await {
+                match serde_json::from_str::<serde_json::Value>(&text) {
                     Ok(json)
                         if json != Value::Null
                             && !json.as_object().is_some_and(|o| o.is_empty())
@@ -235,19 +250,19 @@ async fn check_api_platform(
                             error: None,
                         }
                     }
-                    Err(e) => PlatformResult {
+                    Ok(_) => PlatformResult {
                         url: url.clone(),
                         name: platform.name.clone(),
-                        found: true,
+                        found: false, // Empty JSON treated as not found
                         profile: None,
-                        error: Some(format!("Failed to parse JSON: {}", e)),
+                        error: None,
                     },
-                    _ => PlatformResult {
+                    Err(_) => PlatformResult {
                         url: url.clone(),
                         name: platform.name.clone(),
-                        found: false, // ← usually you want false here
+                        found: true, // Non-JSON response treated as found
                         profile: None,
-                        error: Some("Empty or invalid JSON response".to_string()),
+                        error: None,
                     },
                 }
             } else if status == 404 || status == 403 {
