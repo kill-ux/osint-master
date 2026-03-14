@@ -17,7 +17,7 @@
 
 ---
 
-## 📌 Project Overview
+## Project Overview
 
 OSINT Master is a command-line tool designed for open-source intelligence gathering. It aggregates data across multiple platforms to help security researchers, analysts, and penetration testers discover assets, users, domains, and other relevant information.
 
@@ -28,7 +28,7 @@ OSINT Master is a command-line tool designed for open-source intelligence gather
 
 ---
 
-## 🛠️ Prerequisites and Dependencies
+## Prerequisites and Dependencies
 
 - **Operating System:** Linux (preferred), macOS, or Windows with a POSIX-compatible shell.
 - **Rust toolchain:** `rustc` 1.60+ and `cargo` installed (via [rustup](https://rustup.rs/)).
@@ -38,7 +38,7 @@ The project uses crates listed in `Cargo.toml` (e.g., `reqwest`, `serde`, `anyho
 
 ---
 
-## 🚀 Installation and Setup
+## Installation and Setup
 
 1. **Clone the repository:**
    ```sh
@@ -60,7 +60,7 @@ The project uses crates listed in `Cargo.toml` (e.g., `reqwest`, `serde`, `anyho
 
 ---
 
-## 📁 Usage Examples
+## Usage Examples
 
 OSINT Master supports three main features: IP investigation, username enumeration, and domain analysis. Run the binary with the subcommand you need:
 
@@ -162,7 +162,7 @@ Output is printed to stdout in JSON by default. You can:
 
 ---
 
-## ⚙️ Command-line Options and Parameters
+## Command-line Options and Parameters
 
 ### Main Commands
 
@@ -307,7 +307,7 @@ Each subcommand has its own `--help` output that details specific parameters:
 
 ---
 
-## 📤 Output Format and Results
+## Output Format and Results
 
 Results are serialized to JSON format for easy parsing and further analysis. The output structure varies depending on the command used.
 
@@ -725,7 +725,7 @@ Comprehensive guides available in separate files:
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 - **[API_CONFIGURATION.md](API_CONFIGURATION.md)** - Comprehensive guide to API setup, platforms.json structure, adding new platforms, and troubleshooting
 - **[PLATFORMS_QUICKREF.md](PLATFORMS_QUICKREF.md)** - Quick reference of all supported platforms, API requirements, and usage tips
@@ -743,7 +743,7 @@ Failure to adhere to these guidelines may expose you and your organization to ri
 
 ---
 
-## 🧩 Troubleshooting Guide
+## Troubleshooting Guide
 
 ### Build Issues
 
@@ -949,7 +949,7 @@ cat debug.log
 
 ---
 
-## 🚧 Known Limitations and Constraints
+## Known Limitations and Constraints
 
 ### Output Format Limitations
 
@@ -1063,7 +1063,7 @@ Contributions and enhancements are welcome via pull requests.
 
 ---
 
-## 📚 Complete README Checklist
+## Complete README Checklist
 
 This README is a comprehensive guide that includes everything you need to use OSINT Master:
 
@@ -1152,7 +1152,7 @@ This README is a comprehensive guide that includes everything you need to use OS
 
 ---
 
-### 🖥️ Graphical User Interface (GUI)
+### Graphical User Interface (GUI)
 
 A modern, responsive GUI built with [Iced](https://iced.rs/) provides an elegant user-friendly interface for OSINT lookups with professional styling and smooth interactions.
 
