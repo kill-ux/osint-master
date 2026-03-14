@@ -3,14 +3,19 @@ use iced::{Alignment, Color, Element, Length, Sandbox, Settings, Theme};
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Main entry point for the GUI application.
 pub fn main() -> iced::Result {
     OsintGui::run(Settings::default())
 }
 
+/// Supported query types in the GUI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QueryType {
+    /// IP address lookup.
     IP,
+    /// Domain enumeration and takeover check.
     Domain,
+    /// Username lookup across platforms.
     Username,
 }
 
@@ -30,18 +35,28 @@ impl std::fmt::Display for QueryType {
     }
 }
 
+/// Messages for the GUI's update loop.
 #[derive(Debug, Clone)]
 pub enum Message {
+    /// Query type selection changed.
     QueryTypeChanged(QueryType),
+    /// Input field content changed.
     InputChanged(String),
+    /// Search button pressed or enter key hit.
     SearchPressed,
+    /// Clear output and input fields.
     ClearOutput,
 }
 
+/// State of the OSINT Master GUI application.
 pub struct OsintGui {
+    /// Currently selected query type.
     query_type: QueryType,
+    /// Current content of the input field.
     input: String,
+    /// Output text to display in the result area.
     output: String,
+    /// Whether a search operation is currently in progress.
     is_loading: bool,
 }
 
@@ -219,93 +234,16 @@ impl Sandbox for OsintGui {
         .push(Space::with_height(Length::Fill))
         .into()
     }
-    /*
-    fn view(&self) -> Element<'_, Message> {
-        let title = text("OSINT Master").size(28);
-
-        let query_dropdown = row![
-            button(text("IP").size(16))
-                .padding(10)
-                .on_press(Message::QueryTypeChanged(QueryType::IP))
-                .style(if self.query_type == QueryType::IP {
-                    iced::theme::Button::Primary
-                } else {
-                    iced::theme::Button::Secondary
-                }),
-            button(text("Domain").size(16))
-                .padding(10)
-                .on_press(Message::QueryTypeChanged(QueryType::Domain))
-                .style(if self.query_type == QueryType::Domain {
-                    iced::theme::Button::Primary
-                } else {
-                    iced::theme::Button::Secondary
-                }),
-            button(text("User").size(16))
-                .padding(10)
-                .on_press(Message::QueryTypeChanged(QueryType::Username))
-                .style(if self.query_type == QueryType::Username {
-                    iced::theme::Button::Primary
-                } else {
-                    iced::theme::Button::Secondary
-                }),
-        ]
-        .spacing(12);
-
-        let input_field = text_input("Enter target...", &self.input)
-            .on_input(Message::InputChanged)
-            .padding(12)
-            .size(16)
-            .width(Length::Fill)
-            .style(iced::theme::TextInput::Default);
-
-        let search_btn = button(text("🔍 Search").size(14))
-            .padding(12)
-            .on_press(Message::SearchPressed)
-            .style(iced::theme::Button::Primary);
-
-        let clear_btn = button(text("🗑️ Clear").size(14))
-            .padding(12)
-            .on_press(Message::ClearOutput)
-            .style(iced::theme::Button::Secondary);
-
-        let controls = row![query_dropdown, input_field, search_btn, clear_btn]
-            .spacing(15)
-            .padding(15)
-            .align_items(Alignment::Center);
-
-        let output_display =
-            container(scrollable(text(&self.output).size(13)).height(Length::Fill))
-                .padding(15)
-                .height(Length::Fill)
-                .width(Length::Fill);
-
-        let header = container(
-            column![
-                title,
-                text("Intelligence Gathering Tool")
-                    .size(12)
-                    .font(iced::Font::MONOSPACE)
-            ]
-            .spacing(2),
-        )
-        .padding(20)
-        .center_x()
-        .width(Length::Fill);
-
-        let content = column![header, controls, output_display]
-            .spacing(0)
-            .height(Length::Fill)
-            .width(Length::Fill);
-
-        container(content)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(iced::theme::Container::Box)
-            .into()
-    }
-    */
 }
 
+/// Executes a search by calling the `osintmaster` CLI binary.
+/// 
+/// # Arguments
+/// * `target` - The target to search for.
+/// * `query_type` - The type of search to perform.
+/// 
+/// # Returns
+/// * `String` - The output or error message from the CLI.
 fn execute_search(target: &str, query_type: QueryType) -> String {
     let target = target.trim();
     if target.is_empty() {
@@ -346,6 +284,10 @@ fn execute_search(target: &str, query_type: QueryType) -> String {
     }
 }
 
+/// Attempts to find the path to the `osintmaster` binary.
+/// 
+/// # Returns
+/// * `PathBuf` - The path to the binary.
 fn get_osintmaster_path() -> PathBuf {
     // Try current exe directory first
     if let Ok(exe_path) = std::env::current_exe()

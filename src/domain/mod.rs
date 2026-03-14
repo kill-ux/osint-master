@@ -11,6 +11,15 @@ use serde::{Deserialize, Serialize};
 pub mod takeover;
 pub use takeover::*;
 
+/// Performs a domain lookup for subdomains using crt.sh.
+/// 
+/// # Arguments
+/// * `target` - The target domain to scan.
+/// * `output` - Optional file path to save the results.
+/// * `threads` - Number of concurrent threads for resolution.
+/// 
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn run_domain_lookup(
     target: String,
     output: Option<String>,
@@ -29,15 +38,29 @@ pub async fn run_domain_lookup(
     Ok(())
 }
 
+/// Represents an entry returned by crt.sh.
 #[derive(Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 struct CrtShEntry {
+    /// The name value (domain/subdomain) from the certificate.
     name_value: String,
+    /// The crt.sh ID for the certificate.
     id: u64,
+    /// The expiration date of the certificate.
     #[serde(with = "crt_sh_date_format")]
     not_after: DateTime<Utc>,
 }
 
 pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioRuntime>>;
+
+/// Runs subdomain enumeration using crt.sh and resolves discovered subdomains.
+/// 
+/// # Arguments
+/// * `target` - The target domain to scan.
+/// * `output` - Optional file path to save the results.
+/// * `threads` - Number of concurrent threads for resolution.
+/// 
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn run_ctr_sh(target: &str, output: Option<String>, threads: usize) -> Result<()> {
     let client = Client::new();
     let url = format!("https://crt.sh/?q=.{}&output=json", target);
@@ -74,7 +97,7 @@ pub async fn run_ctr_sh(target: &str, output: Option<String>, threads: usize) ->
         }
     }
 
-    // NOW resolve each subdomain individually
+    // resolve each subdomain individually
     let mut domins: Vec<SubdomainInfo> = Vec::new();
     let resolver = Arc::new(TokioAsyncResolver::tokio_from_system_conf()?); // Res
     let client = Client::builder()
@@ -120,12 +143,12 @@ pub async fn run_ctr_sh(target: &str, output: Option<String>, threads: usize) ->
         }
     }
 
-    // use the shared report printer
     print_report(domins, output).await?;
 
     Ok(())
 }
 
+/// Adds a vulnerability message to a SubdomainInfo struct.
 fn add_vuln(info: &mut SubdomainInfo, msg: &str) {
     if info.vulnerability.is_empty() {
         info.vulnerability = msg.to_string();
@@ -134,40 +157,54 @@ fn add_vuln(info: &mut SubdomainInfo, msg: &str) {
     }
 }
 
+/// Represents information about a discovered subdomain.
 #[derive(Debug, Default, Serialize)]
 pub struct SubdomainInfo {
+    /// The subdomain hostname.
     pub domain: String,      // e.g. "www.example.com"
+    /// The resolved IP address, if any.
     pub ip: Option<String>,  // e.g. "123.123.123.123"
+    /// The DNS record type (e.g., "A", "CNAME", "NXDOMAIN").
     pub record_type: String, // e.g. "A" or "CNAME"
+    /// The certificate issuer.
     pub issuer: String,
+    /// The crt.sh certificate ID.
     pub cert_id: u64,
+    /// The certificate expiration date string.
     pub expiry: String,
+    /// The X.509 version.
     pub version: String,
+    /// The certificate serial number.
     pub serial: String,
+    /// The signature algorithm used.
     pub signature: String,
+    /// Any identified vulnerabilities or risks.
     pub vulnerability: String,
 }
 
+/// Represents basic details extracted from a certificate.
 pub struct CertDetails {
+    /// The Common Name (CN) from the certificate.
     pub common_name: String,
+    /// Subject Alternative Names (SANs).
     pub sans: Vec<String>,
 }
 
+/// Date formatting module for crt.sh responses.
 mod crt_sh_date_format {
     use chrono::{DateTime, NaiveDateTime, Utc};
     use serde::{Deserialize, Deserializer};
 
+    /// Deserializes a date string from crt.sh into a DateTime<Utc>.
     pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
 
-        // Try parsing as NaiveDateTime first (no timezone)
         match NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S") {
             Ok(naive_dt) => Ok(DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc)),
             Err(_) => {
-                // Also try with fractional seconds
                 let without_fraction = s.split('.').next().unwrap_or(&s);
                 NaiveDateTime::parse_from_str(without_fraction, "%Y-%m-%dT%H:%M:%S")
                     .map(|naive_dt| DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc))
@@ -189,6 +226,14 @@ use trust_dns_resolver::{
 };
 use x509_parser::prelude::*;
 
+/// Fetches and parses certificate details in binary format from crt.sh.
+/// 
+/// # Arguments
+/// * `info` - The SubdomainInfo to populate with certificate details.
+/// * `client` - The HTTP client to use for the request.
+/// 
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn get_cert_details_binary(info: &mut SubdomainInfo, client: Arc<Client>) -> Result<()> {
     let url = format!("https://crt.sh/?d={}", info.cert_id);
     let raw_data = client.get(url).send().await?.bytes().await?;
@@ -240,6 +285,11 @@ pub async fn get_cert_details_binary(info: &mut SubdomainInfo, client: Arc<Clien
     Ok(())
 }
 
+/// Checks if a subdomain is vulnerable to takeover.
+/// 
+/// # Arguments
+/// * `info` - The SubdomainInfo to check and update.
+/// * `resolver` - The DNS resolver to use.
 pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
     match resolve_cname(info, resolver).await {
         Ok(cname) => {
@@ -270,6 +320,14 @@ pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
     }
 }
 
+/// Resolves the CNAME record for a subdomain.
+/// 
+/// # Arguments
+/// * `info` - The SubdomainInfo containing the domain to resolve.
+/// * `resolver` - The DNS resolver to use.
+/// 
+/// # Returns
+/// * `Result<String>` - The CNAME target if found, Error otherwise.
 pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<String> {
     let lookup = resolver.lookup(&info.domain, RecordType::CNAME).await?;
     // Return the first CNAME target found
@@ -287,6 +345,13 @@ pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<S
 /// replaces the previous `pretty_print` helper and is used by both the
 /// normal lookup (`run_ctr_sh`) and the SSLMate takeover workflow.  It
 /// optionally persists the data when an output path is provided.
+/// 
+/// # Arguments
+/// * `domins` - A list of SubdomainInfo results.
+/// * `output` - Optional file path to save the results.
+/// 
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn print_report(domins: Vec<SubdomainInfo>, output: Option<String>) -> Result<()> {
     println!(
         "\n{} {}",

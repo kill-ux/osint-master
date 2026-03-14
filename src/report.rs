@@ -44,6 +44,17 @@ fn flatten_json_to_kv(value: &serde_json::Value, prefix: &str, out: &mut Vec<(St
     }
 }
 
+/// Saves a serializable report to a file.
+/// 
+/// The format is determined by the file extension. `.json` will result in a JSON file,
+/// while other extensions will result in a flattened key-value text format.
+/// 
+/// # Arguments
+/// * `path` - The file path to save the report to.
+/// * `data` - The serializable data to save.
+/// 
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn save_report<T: Serialize>(path: &str, data: &T) -> Result<()> {
     let is_json = Path::new(path)
         .extension()

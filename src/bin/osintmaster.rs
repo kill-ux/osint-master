@@ -7,6 +7,10 @@ use osint_master::{
     username::run_username_lookup,
 };
 
+/// The main entry point for the osintmaster CLI tool.
+/// 
+/// It parses command-line arguments and dispatches the request to the
+/// appropriate lookup function (IP, Username, or Domain).
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();

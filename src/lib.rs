@@ -6,7 +6,3 @@ pub mod report;
 pub mod username;
 
 pub use cli::*;
-// pub use domain::*;
-// pub use ip::*;
-// pub use output::*;
-// pub use username::*;
