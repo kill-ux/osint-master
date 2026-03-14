@@ -376,61 +376,11 @@
         ]
     },
     {
-        "name": "LinkedIn",
-        "url": "https://api.linkedin.com/v2/people/(id:{id})",
-        "api_key": "LINKEDIN_API_KEY",
+        "name": "Linkding (Google Site Search)",
+        "url": "https://www.google.com/search?q=site:linkedin.com/in/{username}",
         "not_found_indicators": [
-            "404"
-        ],
-        "profile_fields": [
-            {
-                "name": "id",
-                "path": "/id"
-            },
-            {
-                "name": "firstName",
-                "path": "/firstName/localized/en_US"
-            },
-            {
-                "name": "lastName",
-                "path": "/lastName/localized/en_US"
-            },
-            {
-                "name": "profilePicture",
-                "path": "/profilePicture/displayImage~"
-            },
-            {
-                "name": "headline",
-                "path": "/headline/localized/en_US"
-            },
-            {
-                "name": "location",
-                "path": "/locationName"
-            },
-            {
-                "name": "industry",
-                "path": "/industryName"
-            },
-            {
-                "name": "summary",
-                "path": "/summary/localized/en_US"
-            },
-            {
-                "name": "numConnections",
-                "path": "/numConnections"
-            },
-            {
-                "name": "numConnectionsCapped",
-                "path": "/numConnectionsCapped"
-            },
-            {
-                "name": "vanityName",
-                "path": "/vanityName"
-            },
-            {
-                "name": "publicProfileUrl",
-                "path": "/publicProfileUrl"
-            }
+            "No results found",
+            "did not match any documents"
         ]
     }
 ]

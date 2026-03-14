@@ -1,11 +1,11 @@
 {
   "username": "kill-ux",
-  "total_checked": 6,
+  "total_checked": 8,
   "total_found": 6,
   "platforms": [
     {
-      "name": "GitHub",
       "url": "https://api.github.com/users/kill-ux",
+      "name": "GitHub",
       "found": true,
       "profile": {
         "avatar_url": "https://avatars.githubusercontent.com/u/185858933?v=4",
@@ -14,23 +14,23 @@
         "company": "zone01",
         "created_at": "2024-10-21T22:49:38Z",
         "email": null,
-        "followers": 43,
-        "following": 131,
+        "followers": 44,
+        "following": 132,
         "hireable": null,
         "html_url": "https://github.com/kill-ux",
         "location": "Morocco Oujda",
         "login": "kill-ux",
         "name": "Mustapha Boutoub",
         "public_gists": 0,
-        "public_repos": 92,
+        "public_repos": 94,
         "twitter_username": null,
-        "updated_at": "2026-02-22T10:16:47Z"
+        "updated_at": "2026-03-11T10:17:23Z"
       },
       "error": null
     },
     {
-      "name": "GitLab",
       "url": "https://gitlab.com/api/v4/users?username=kill-ux",
+      "name": "GitLab",
       "found": true,
       "profile": {
         "avatar_url": "https://gitlab.com/uploads/-/system/user/avatar/34848738/avatar.png",
@@ -45,15 +45,15 @@
       "error": null
     },
     {
-      "name": "HackerNews",
-      "url": "https://hacker-news.firebaseio.com/v0/user/kill-ux.json",
+      "url": "https://www.google.com/search?q=site:linkedin.com/in/kill-ux",
+      "name": "Linkding (Google Site Search)",
       "found": true,
       "profile": null,
       "error": null
     },
     {
-      "name": "Reddit",
       "url": "https://www.reddit.com/user/kill-ux/about.json",
+      "name": "Reddit",
       "found": true,
       "profile": {
         "avatar": "https://styles.redditmedia.com/t5_gop9bo/styles/profileIcon_ntoawwtst6lg1.jpg?width=256&amp;height=256&amp;crop=256:256,smart&amp;s=701b79448e2c62892ebb529f8a6e2fdc24f9bce4",
@@ -70,19 +70,59 @@
       "error": null
     },
     {
+      "url": "http://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=26ABB7D377F2791702CCFCFA9E42A0EA&steamids=76561199791915581",
       "name": "Steam",
-      "url": "https://steamcommunity.com/id/kill-ux/?xml=1",
       "found": true,
-      "profile": null,
-      "error": "Failed to parse JSON: error decoding response body: expected value at line 1 column 1"
+      "profile": {
+        "avatar": "https://avatars.steamstatic.com/7cd4d05ae6af0e2b303d53a92fd0e794efa1b8d4_full.jpg",
+        "communityvisibilitystate": 3,
+        "loccountrycode": "MA",
+        "locstatecode": "23",
+        "personaname": "kill-ux",
+        "personastate": 0,
+        "profileurl": "https://steamcommunity.com/id/kill-ux/",
+        "realname": "Mustapha Boutoub",
+        "steamid": "76561199791915581",
+        "timecreated": 1728920627
+      },
+      "error": null
     },
     {
-      "name": "Twitter (via Nitter)",
-      "url": "https://nitter.net/kill-ux",
+      "url": "https://codeberg.org/api/v1/users/kill-ux",
+      "name": "codeberg",
       "found": true,
+      "profile": {
+        "avatar_url": "https://codeberg.org/avatars/094d9952fcd9b7f83040e916e8c83848",
+        "description": "",
+        "email": "kill-ux@noreply.codeberg.org",
+        "followers_count": 0,
+        "following_count": 0,
+        "full_name": "",
+        "html_url": "https://codeberg.org/kill-ux",
+        "id": 889859,
+        "location": "",
+        "login": "kill-ux",
+        "pronouns": "",
+        "starred_repos_count": 0,
+        "visibility": "public",
+        "website": ""
+      },
+      "error": null
+    },
+    {
+      "url": "https://hacker-news.firebaseio.com/v0/user/kill-ux.json",
+      "name": "HackerNews",
+      "found": false,
+      "profile": null,
+      "error": null
+    },
+    {
+      "url": "https://mastodon.social/api/v1/accounts/lookup?acct=kill-ux",
+      "name": "Mastodon",
+      "found": false,
       "profile": null,
       "error": null
     }
   ],
-  "scan_time": "2026-02-24T13:00:52.524605345+00:00"
+  "scan_time": "2026-03-14T14:11:07.144037246+00:00"
 }

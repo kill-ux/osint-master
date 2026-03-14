@@ -3,64 +3,38 @@ use std::{env, sync::Arc};
 use anyhow::Result;
 use dotenvy::dotenv;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
-use tokio::{fs::File, io::AsyncReadExt, sync::Semaphore, task::JoinSet};
+use tokio::{sync::Semaphore, task::JoinSet};
 
 use colored::Colorize;
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct ProfileField {
-    pub name: String,
-    pub path: String,
-}
+use crate::username::platform::{Platform, PlatformResult, PreProcess, load_platforms};
+pub mod platform;
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct Platform {
-    pub name: String,
-    pub url: String,
-    pub pre_url: Option<String>,
-    pub pre_process: Option<PreProcess>,
-    pub not_found_indicators: Vec<String>,
-    pub profile_fields: Option<Vec<ProfileField>>,
-    pub api_key: Option<String>,
-    pub html_extractors: Option<Vec<HtmlExtractor>>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct PreProcess {
-    pub url: String,
-    pub response_path: String,
-    pub not_found_indicators: Vec<String>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct HtmlExtractor {
-    pub name: String,
-    pub pattern: String,
-    pub group: Option<usize>,
-}
-
-pub type ProfileData = serde_json::Value;
-
-#[derive(Debug, Serialize)]
-pub struct PlatformResult {
-    pub url: String,
-    pub name: String,
-    pub found: bool,
-    pub profile: Option<ProfileData>,
-    pub error: Option<String>,
-}
-
+/// Represents a full report of username lookup results across all platforms.
 #[derive(Debug, Serialize)]
 pub struct UsernameReport {
+    /// The username being searched.
     pub username: String,
+    /// Total number of platforms checked.
     pub total_checked: usize,
+    /// Total number of platforms where the username was found.
     pub total_found: usize,
+    /// Detailed results for each platform.
     pub platforms: Vec<PlatformResult>,
+    /// The timestamp when the scan was completed.
     pub scan_time: String,
 }
 
+/// Performs a username lookup across multiple platforms.
+///
+/// # Arguments
+/// * `username` - The username to search for.
+/// * `output` - Optional file path to save the results.
+///
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn run_username_lookup(username: String, output: Option<String>) -> Result<()> {
     println!("Searching Username: {}", username);
 
@@ -88,14 +62,15 @@ pub async fn run_username_lookup(username: String, output: Option<String>) -> Re
     Ok(())
 }
 
-async fn load_platforms() -> Result<Vec<Platform>> {
-    let mut file = File::open("platforms.json").await?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).await?;
-    let platforms: Vec<Platform> = serde_json::from_str(&contents)?;
-    Ok(platforms)
-}
-
+/// Scans all provided platforms for a username concurrently.
+///
+/// # Arguments
+/// * `username` - The username to scan.
+/// * `platforms` - A list of platforms to check.
+/// * `client` - The HTTP client to use.
+///
+/// # Returns
+/// * `Result<UsernameReport>` - The aggregated report on success.
 async fn scan_platforms(
     username: &str,
     platforms: Vec<Platform>,
@@ -145,6 +120,14 @@ async fn scan_platforms(
     })
 }
 
+/// Performs a pre-processing request to get a user ID for a platform.
+///
+/// # Arguments
+/// * `pre_process` - The pre-processing configuration.
+/// * `client` - The HTTP client to use.
+///
+/// # Returns
+/// * `Result<Option<String>>` - The extracted ID if successful.
 async fn check_pre_url(pre_process: PreProcess, client: &Client) -> Result<Option<String>> {
     let response = client.get(pre_process.url).send().await?;
 
@@ -160,6 +143,16 @@ async fn check_pre_url(pre_process: PreProcess, client: &Client) -> Result<Optio
     Ok(None)
 }
 
+/// Checks a single platform's API for a username.
+///
+/// # Arguments
+/// * `platform` - The platform configuration.
+/// * `url` - The URL to check.
+/// * `client` - The HTTP client to use.
+/// * `pre_process` - Optional pre-processing configuration.
+///
+/// # Returns
+/// * `Result<PlatformResult>` - The result of the platform check.
 async fn check_api_platform(
     platform: &Platform,
     url: &str,
@@ -193,8 +186,24 @@ async fn check_api_platform(
             let status = resp.status();
 
             if status.is_success() {
-                // Try to parse JSON
-                match resp.json::<serde_json::Value>().await {
+                let text = resp.text().await.unwrap_or_default();
+
+                let is_not_found = platform
+                    .not_found_indicators
+                    .iter()
+                    .any(|indicator| text.contains(indicator));
+
+                if is_not_found {
+                    return Ok(PlatformResult {
+                        url: url.clone(),
+                        name: platform.name.clone(),
+                        found: false,
+                        profile: None,
+                        error: None,
+                    });
+                }
+
+                match serde_json::from_str::<serde_json::Value>(&text) {
                     Ok(json)
                         if json != Value::Null
                             && !json.as_object().is_some_and(|o| o.is_empty())
@@ -235,19 +244,19 @@ async fn check_api_platform(
                             error: None,
                         }
                     }
-                    Err(e) => PlatformResult {
+                    Ok(_) => PlatformResult {
                         url: url.clone(),
                         name: platform.name.clone(),
-                        found: true,
+                        found: false, // Empty JSON treated as not found
                         profile: None,
-                        error: Some(format!("Failed to parse JSON: {}", e)),
+                        error: None,
                     },
-                    _ => PlatformResult {
+                    Err(_) => PlatformResult {
                         url: url.clone(),
                         name: platform.name.clone(),
-                        found: false, // ← usually you want false here
+                        found: true, // Non-JSON response treated as found
                         profile: None,
-                        error: Some("Empty or invalid JSON response".to_string()),
+                        error: None,
                     },
                 }
             } else if status == 404 || status == 403 {
@@ -279,7 +288,13 @@ async fn check_api_platform(
     Ok(profile)
 }
 
-// check steam if response > playesrs empty
+/// Checks special cases in JSON responses for certain platforms (e.g., Steam).
+///
+/// # Arguments
+/// * `json` - The JSON value to check.
+///
+/// # Returns
+/// * `bool` - True if the special case check passes, false otherwise.
 fn check_special_cases(json: &Value) -> bool {
     if let Some(players) = json.pointer("/response/players") {
         return !players.as_array().is_some_and(|o| o.is_empty());
@@ -287,6 +302,10 @@ fn check_special_cases(json: &Value) -> bool {
     true
 }
 
+/// Prints a formatted report of the username lookup results to the console.
+///
+/// # Arguments
+/// * `report` - The username lookup report to print.
 fn print_report(report: &UsernameReport) {
     println!("\n{}", "═".repeat(80).bright_blue());
     println!(
