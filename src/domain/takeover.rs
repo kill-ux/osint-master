@@ -24,6 +24,7 @@ use trust_dns_resolver::{
     proto::rr::RecordType,
 };
 
+/// List of known vulnerable providers and their associated patterns and not-found indicators.
 const VULNERABLE_PROVIDERS: &[(&str, &str, &str)] = &[
     // Cloud Platforms
     ("AWS S3", "s3.amazonaws.com", "NoSuchBucket"),
@@ -119,6 +120,7 @@ const VULNERABLE_PROVIDERS: &[(&str, &str, &str)] = &[
     ),
 ];
 
+/// Type alias for the DNS resolver used in takeover checks.
 pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioRuntime>>;
 
 // ==================== DATA STRUCTURES ====================
@@ -130,46 +132,66 @@ use super::SubdomainInfo;
 
 // ==================== SSLMATE API STRUCTS ====================
 
+/// Represents a certificate issuance returned by the SSLMate API.
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 struct CertSpotterIssuance {
+    /// Unique ID for the issuance.
     id: String,
+    /// DNS names associated with the certificate.
     dns_names: Option<Vec<String>>,
+    /// Certificate validity start date.
     not_before: String,
+    /// Certificate validity end date.
     not_after: String,
+    /// Information about the certificate issuer.
     issuer: Option<IssuerInfo>,
+    /// Whether the certificate has been revoked.
     revoked: Option<bool>,
+    /// Revocation details.
     #[serde(default)]
     revocation: Option<RevocationInfo>,
+    /// Public key information.
     #[serde(default)]
     pubkey: Option<PubKeyInfo>,
+    /// DER-encoded certificate.
     cert_der: Option<String>,
+    /// SHA256 hash of the TBS certificate.
     tbs_sha256: Option<String>,
 }
 
+/// Information about a certificate issuer.
 #[derive(Debug, Deserialize, Clone)]
 struct IssuerInfo {
+    /// Friendly name of the issuer.
     friendly_name: String,
+    /// Distinguished name of the issuer.
     name: Option<String>,
 }
 
+/// Revocation details for a certificate.
 #[allow(dead_code)]
 #[derive(Debug, Deserialize, Clone)]
 struct RevocationInfo {
+    /// The reason for revocation.
     #[serde(default, deserialize_with = "deserialize_reason")]
     reason: Option<String>,
+    /// The time of revocation.
     #[serde(default)]
     time: Option<String>,
 }
 
+/// Public key information from a certificate.
 #[derive(Debug, Deserialize, Clone)]
 struct PubKeyInfo {
+    /// The type of public key (e.g., "rsa", "ecdsa").
     #[serde(rename = "type")]
     key_type: String,
+    /// The length of the key in bits.
     bit_length: Option<i32>,
 }
 
-// Custom deserializer for revocation reason
+/// Custom deserializer for revocation reason codes.
 fn deserialize_reason<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -232,17 +254,26 @@ where
 
 // ==================== SSLMATE CLIENT ====================
 
+/// Client for interacting with the SSLMate API.
 pub struct SSLMateClient {
     client: Client,
     api_key: String,
 }
 
 impl SSLMateClient {
+    /// Creates a new SSLMateClient with the provided API key.
     pub fn new(api_key: String) -> Result<Self> {
         let client = Client::builder().timeout(Duration::from_secs(15)).build()?;
         Ok(Self { client, api_key })
     }
 
+    /// Fetches certificate issuances for a domain and its subdomains.
+    /// 
+    /// # Arguments
+    /// * `domain` - The domain to search for.
+    /// 
+    /// # Returns
+    /// * `Result<Vec<CertSpotterIssuance>>` - A list of issuances on success.
     async fn get_issuances(&self, domain: &str) -> Result<Vec<CertSpotterIssuance>> {
         let encoded = percent_encode(domain.as_bytes(), NON_ALPHANUMERIC).to_string();
 
@@ -271,6 +302,13 @@ impl SSLMateClient {
 
 // ==================== DNS RESOLVER ====================
 
+/// Resolves a domain name to a list of IP addresses.
+/// 
+/// # Arguments
+/// * `domain` - The domain name to resolve.
+/// 
+/// # Returns
+/// * `Result<Vec<String>>` - A list of IP addresses on success.
 pub async fn resolve_domain(domain: &str) -> Result<Vec<String>> {
     match timeout(
         Duration::from_secs(3),
@@ -288,6 +326,11 @@ pub async fn resolve_domain(domain: &str) -> Result<Vec<String>> {
 
 // ==================== TAKEOVER CHECK ====================
 
+/// Checks if a subdomain is vulnerable to takeover using the provided DNS resolver.
+/// 
+/// # Arguments
+/// * `info` - The SubdomainInfo to check and update.
+/// * `resolver` - The DNS resolver to use.
 pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
     match resolve_cname(info, resolver).await {
         Ok(cname) => {
@@ -315,6 +358,14 @@ pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
     }
 }
 
+/// Resolves the CNAME record for a subdomain.
+/// 
+/// # Arguments
+/// * `info` - The SubdomainInfo containing the domain to resolve.
+/// * `resolver` - The DNS resolver to use.
+/// 
+/// # Returns
+/// * `Result<String>` - The CNAME target if found, Error otherwise.
 pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<String> {
     let lookup = resolver.lookup(&info.domain, RecordType::CNAME).await?;
     for record in lookup.iter() {
@@ -327,6 +378,7 @@ pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<S
 
 // ==================== HELPER FUNCTIONS ====================
 
+/// Adds a vulnerability message to a SubdomainInfo struct.
 fn add_vuln(info: &mut SubdomainInfo, msg: &str) {
     if info.vulnerability.is_empty() {
         info.vulnerability = msg.to_string();
@@ -337,6 +389,15 @@ fn add_vuln(info: &mut SubdomainInfo, msg: &str) {
 
 // ==================== MAIN ENUMERATION FUNCTION ====================
 
+/// Enumerates subdomains for a domain using SSLMate's CertSpotter API.
+/// 
+/// # Arguments
+/// * `domain` - The target domain to scan.
+/// * `sslmate_key` - The API key for SSLMate.
+/// * `threads` - Number of concurrent threads for resolution.
+/// 
+/// # Returns
+/// * `Result<Vec<SubdomainInfo>>` - A list of discovered subdomains and their details.
 pub async fn enumerate_subdomains(
     domain: &str,
     sslmate_key: &str,
@@ -457,11 +518,7 @@ pub async fn enumerate_subdomains(
                 .unwrap_or_else(|| "Unknown".to_string());
 
             let signature = if let Some(pubkey) = &cert.pubkey {
-                if pubkey.key_type == "ecdsa" {
-                    "ecdsa (P-256)".to_string() // or extract actual curve from cert
-                } else {
-                    format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
-                }
+                format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
             } else {
                 "Unknown".to_string()
             };
@@ -514,8 +571,15 @@ pub async fn enumerate_subdomains(
     Ok(results)
 }
 
-// ==================== MAIN FUNCTION ====================
-
+/// Runs domain lookup using SSLMate and prints a report.
+/// 
+/// # Arguments
+/// * `target` - The target domain to scan.
+/// * `output` - Optional file path to save the results.
+/// * `threads` - Number of concurrent threads for resolution.
+/// 
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn run_domain_lookup_sslmate(
     target: String,
     output: Option<String>,

@@ -11,13 +11,68 @@ use tracing::warn;
 /// This replaces the repetitive `save_report` implementations found in
 /// the various domain/ip/username modules and ensures all callers behave
 /// identically when creating parent directories or formatting errors.
+fn flatten_json_to_kv(value: &serde_json::Value, prefix: &str, out: &mut Vec<(String, String)>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (k, v) in map {
+                let key = if prefix.is_empty() {
+                    k.to_string()
+                } else {
+                    format!("{}_{}", prefix, k)
+                };
+                flatten_json_to_kv(v, &key, out);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for (i, v) in arr.iter().enumerate() {
+                let key = format!("{}_{}", prefix, i);
+                flatten_json_to_kv(v, &key, out);
+            }
+        }
+        serde_json::Value::String(s) => {
+            out.push((prefix.to_string(), s.clone()));
+        }
+        serde_json::Value::Number(n) => {
+            out.push((prefix.to_string(), n.to_string()));
+        }
+        serde_json::Value::Bool(b) => {
+            out.push((prefix.to_string(), b.to_string()));
+        }
+        serde_json::Value::Null => {
+            out.push((prefix.to_string(), "null".to_string()));
+        }
+    }
+}
+
+/// Saves a serializable report to a file.
+/// 
+/// The format is determined by the file extension. `.json` will result in a JSON file,
+/// while other extensions will result in a flattened key-value text format.
+/// 
+/// # Arguments
+/// * `path` - The file path to save the report to.
+/// * `data` - The serializable data to save.
+/// 
+/// # Returns
+/// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn save_report<T: Serialize>(path: &str, data: &T) -> Result<()> {
-    let res = if path.ends_with("json") {
+    let is_json = Path::new(path)
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.eq_ignore_ascii_case("json"))
+        .unwrap_or(false);
+
+    let res = if is_json {
         serde_json::to_string_pretty(data)?
     } else {
-        serde_txtrecord::to_txt_records(data)?
+        let value = serde_json::to_value(data)?;
+
+        let mut entries = Vec::new();
+        flatten_json_to_kv(&value, "", &mut entries);
+
+        entries
             .into_iter()
-            .map(|(key, value)| format!("{}: {}", key.to_uppercase(), value))
+            .map(|(key, val)| format!("{}: {}", key.to_uppercase(), val))
             .collect::<Vec<_>>()
             .join("\n")
     };
