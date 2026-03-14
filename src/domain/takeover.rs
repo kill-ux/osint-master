@@ -518,11 +518,7 @@ pub async fn enumerate_subdomains(
                 .unwrap_or_else(|| "Unknown".to_string());
 
             let signature = if let Some(pubkey) = &cert.pubkey {
-                if pubkey.key_type == "ecdsa" {
-                    "ecdsa (P-256)".to_string() // or extract actual curve from cert
-                } else {
-                    format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
-                }
+                format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
             } else {
                 "Unknown".to_string()
             };
