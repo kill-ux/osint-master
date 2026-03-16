@@ -13,7 +13,7 @@
   },
   {
     "domain": "api.security.github.com",
-    "ip": "140.82.112.21",
+    "ip": "140.82.114.21",
     "record_type": "A",
     "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1",
     "cert_id": 11329202270,
@@ -25,7 +25,7 @@
   },
   {
     "domain": "asset-generator.github.com",
-    "ip": "185.199.111.153",
+    "ip": "185.199.108.153",
     "record_type": "A",
     "issuer": "C=US, O=Let's Encrypt, CN=R12",
     "cert_id": 14079894851,
@@ -49,18 +49,6 @@
   },
   {
     "domain": "asset-generator.github.com",
-    "ip": "185.199.108.153",
-    "record_type": "A",
-    "issuer": "C=US, O=Let's Encrypt, CN=R12",
-    "cert_id": 14079894851,
-    "expiry": "Mon, 8 Jun 2026 05:45:10 +0000",
-    "version": "V3",
-    "serial": "569259a90a82efeeb235fb2b5e3b66411fe9c9d5342fbf5aba286c13e346216b",
-    "signature": "rsa 2048",
-    "vulnerability": ""
-  },
-  {
-    "domain": "asset-generator.github.com",
     "ip": "185.199.110.153",
     "record_type": "A",
     "issuer": "C=US, O=Let's Encrypt, CN=R12",
@@ -73,19 +61,7 @@
   },
   {
     "domain": "asset-generator.github.com",
-    "ip": "2606:50c0:8000::153",
-    "record_type": "A",
-    "issuer": "C=US, O=Let's Encrypt, CN=R12",
-    "cert_id": 14079894851,
-    "expiry": "Mon, 8 Jun 2026 05:45:10 +0000",
-    "version": "V3",
-    "serial": "569259a90a82efeeb235fb2b5e3b66411fe9c9d5342fbf5aba286c13e346216b",
-    "signature": "rsa 2048",
-    "vulnerability": ""
-  },
-  {
-    "domain": "asset-generator.github.com",
-    "ip": "2606:50c0:8001::153",
+    "ip": "185.199.111.153",
     "record_type": "A",
     "issuer": "C=US, O=Let's Encrypt, CN=R12",
     "cert_id": 14079894851,
@@ -110,6 +86,30 @@
   {
     "domain": "asset-generator.github.com",
     "ip": "2606:50c0:8002::153",
+    "record_type": "A",
+    "issuer": "C=US, O=Let's Encrypt, CN=R12",
+    "cert_id": 14079894851,
+    "expiry": "Mon, 8 Jun 2026 05:45:10 +0000",
+    "version": "V3",
+    "serial": "569259a90a82efeeb235fb2b5e3b66411fe9c9d5342fbf5aba286c13e346216b",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "asset-generator.github.com",
+    "ip": "2606:50c0:8000::153",
+    "record_type": "A",
+    "issuer": "C=US, O=Let's Encrypt, CN=R12",
+    "cert_id": 14079894851,
+    "expiry": "Mon, 8 Jun 2026 05:45:10 +0000",
+    "version": "V3",
+    "serial": "569259a90a82efeeb235fb2b5e3b66411fe9c9d5342fbf5aba286c13e346216b",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "asset-generator.github.com",
+    "ip": "2606:50c0:8001::153",
     "record_type": "A",
     "issuer": "C=US, O=Let's Encrypt, CN=R12",
     "cert_id": 14079894851,
@@ -625,7 +625,7 @@
   },
   {
     "domain": "gameoff.github.com",
-    "ip": "2606:50c0:8000::153",
+    "ip": "2606:50c0:8001::153",
     "record_type": "A",
     "issuer": "C=US, O=Let's Encrypt, CN=R12",
     "cert_id": 13985035442,
@@ -637,7 +637,7 @@
   },
   {
     "domain": "gameoff.github.com",
-    "ip": "2606:50c0:8001::153",
+    "ip": "2606:50c0:8003::153",
     "record_type": "A",
     "issuer": "C=US, O=Let's Encrypt, CN=R12",
     "cert_id": 13985035442,
@@ -661,7 +661,7 @@
   },
   {
     "domain": "gameoff.github.com",
-    "ip": "2606:50c0:8003::153",
+    "ip": "2606:50c0:8000::153",
     "record_type": "A",
     "issuer": "C=US, O=Let's Encrypt, CN=R12",
     "cert_id": 13985035442,
@@ -769,7 +769,7 @@
   },
   {
     "domain": "mailing.github.com",
-    "ip": "185.199.108.105",
+    "ip": "185.199.110.105",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13717664842,
@@ -793,6 +793,18 @@
   },
   {
     "domain": "mailing.github.com",
+    "ip": "185.199.108.105",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 13717664842,
+    "expiry": "Fri, 8 May 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "8f554cd0b563611c429a26d0721c8760f855affc6ce08e61f2c0f60e8e4144d0",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "mailing.github.com",
     "ip": "185.199.109.105",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
@@ -805,7 +817,7 @@
   },
   {
     "domain": "mailing.github.com",
-    "ip": "185.199.110.105",
+    "ip": "2606:50c0:8001::105",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13717664842,
@@ -817,7 +829,7 @@
   },
   {
     "domain": "mailing.github.com",
-    "ip": "2606:50c0:8001::105",
+    "ip": "2606:50c0:8002::105",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13717664842,
@@ -842,18 +854,6 @@
   {
     "domain": "mailing.github.com",
     "ip": "2606:50c0:8003::105",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 13717664842,
-    "expiry": "Fri, 8 May 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "8f554cd0b563611c429a26d0721c8760f855affc6ce08e61f2c0f60e8e4144d0",
-    "signature": "rsa 2048",
-    "vulnerability": ""
-  },
-  {
-    "domain": "mailing.github.com",
-    "ip": "2606:50c0:8002::105",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13717664842,
@@ -961,43 +961,7 @@
   },
   {
     "domain": "octocaptcha.review-lab.github.com",
-    "ip": "140.82.113.16",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 10631219945,
-    "expiry": "Wed, 3 Jun 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "4bf165aaa407f583677ad3977e7b8f418a13322fefd9110678fe0784456e9c46",
-    "signature": "rsa 4096",
-    "vulnerability": ""
-  },
-  {
-    "domain": "octocaptcha.review-lab.github.com",
-    "ip": "140.82.112.15",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 10631219945,
-    "expiry": "Wed, 3 Jun 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "4bf165aaa407f583677ad3977e7b8f418a13322fefd9110678fe0784456e9c46",
-    "signature": "rsa 4096",
-    "vulnerability": ""
-  },
-  {
-    "domain": "octocaptcha.review-lab.github.com",
-    "ip": "140.82.113.15",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 10631219945,
-    "expiry": "Wed, 3 Jun 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "4bf165aaa407f583677ad3977e7b8f418a13322fefd9110678fe0784456e9c46",
-    "signature": "rsa 4096",
-    "vulnerability": ""
-  },
-  {
-    "domain": "octocaptcha.review-lab.github.com",
-    "ip": "140.82.114.15",
+    "ip": "140.82.114.16",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 10631219945,
@@ -1021,7 +985,43 @@
   },
   {
     "domain": "octocaptcha.review-lab.github.com",
-    "ip": "140.82.114.16",
+    "ip": "140.82.113.15",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 10631219945,
+    "expiry": "Wed, 3 Jun 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "4bf165aaa407f583677ad3977e7b8f418a13322fefd9110678fe0784456e9c46",
+    "signature": "rsa 4096",
+    "vulnerability": ""
+  },
+  {
+    "domain": "octocaptcha.review-lab.github.com",
+    "ip": "140.82.112.15",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 10631219945,
+    "expiry": "Wed, 3 Jun 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "4bf165aaa407f583677ad3977e7b8f418a13322fefd9110678fe0784456e9c46",
+    "signature": "rsa 4096",
+    "vulnerability": ""
+  },
+  {
+    "domain": "octocaptcha.review-lab.github.com",
+    "ip": "140.82.114.15",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 10631219945,
+    "expiry": "Wed, 3 Jun 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "4bf165aaa407f583677ad3977e7b8f418a13322fefd9110678fe0784456e9c46",
+    "signature": "rsa 4096",
+    "vulnerability": ""
+  },
+  {
+    "domain": "octocaptcha.review-lab.github.com",
+    "ip": "140.82.113.16",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 10631219945,
@@ -1093,43 +1093,7 @@
   },
   {
     "domain": "smtp.github.com",
-    "ip": "140.82.114.32",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 10924357612,
-    "expiry": "Mon, 29 Jun 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "2277659ddf055734fab833ed463781c68ac98b052d29174e337d7a12923d5710",
-    "signature": "rsa 4096",
-    "vulnerability": ""
-  },
-  {
-    "domain": "smtp.github.com",
     "ip": "140.82.113.32",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 10924357612,
-    "expiry": "Mon, 29 Jun 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "2277659ddf055734fab833ed463781c68ac98b052d29174e337d7a12923d5710",
-    "signature": "rsa 4096",
-    "vulnerability": ""
-  },
-  {
-    "domain": "smtp.github.com",
-    "ip": "140.82.113.31",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 10924357612,
-    "expiry": "Mon, 29 Jun 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "2277659ddf055734fab833ed463781c68ac98b052d29174e337d7a12923d5710",
-    "signature": "rsa 4096",
-    "vulnerability": ""
-  },
-  {
-    "domain": "smtp.github.com",
-    "ip": "140.82.114.31",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 10924357612,
@@ -1164,8 +1128,44 @@
     "vulnerability": ""
   },
   {
+    "domain": "smtp.github.com",
+    "ip": "140.82.114.31",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 10924357612,
+    "expiry": "Mon, 29 Jun 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "2277659ddf055734fab833ed463781c68ac98b052d29174e337d7a12923d5710",
+    "signature": "rsa 4096",
+    "vulnerability": ""
+  },
+  {
+    "domain": "smtp.github.com",
+    "ip": "140.82.113.31",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 10924357612,
+    "expiry": "Mon, 29 Jun 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "2277659ddf055734fab833ed463781c68ac98b052d29174e337d7a12923d5710",
+    "signature": "rsa 4096",
+    "vulnerability": ""
+  },
+  {
+    "domain": "smtp.github.com",
+    "ip": "140.82.114.32",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 10924357612,
+    "expiry": "Mon, 29 Jun 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "2277659ddf055734fab833ed463781c68ac98b052d29174e337d7a12923d5710",
+    "signature": "rsa 4096",
+    "vulnerability": ""
+  },
+  {
     "domain": "support.enterprise.github.com",
-    "ip": "140.82.113.17",
+    "ip": "140.82.114.17",
     "record_type": "A",
     "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1",
     "cert_id": 11329217890,
@@ -1189,7 +1189,7 @@
   },
   {
     "domain": "vpn-ca.iad.github.com",
-    "ip": "185.199.111.153",
+    "ip": "185.199.108.153",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13474812221,
@@ -1213,7 +1213,7 @@
   },
   {
     "domain": "vpn-ca.iad.github.com",
-    "ip": "185.199.108.153",
+    "ip": "185.199.110.153",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13474812221,
@@ -1225,7 +1225,19 @@
   },
   {
     "domain": "vpn-ca.iad.github.com",
-    "ip": "185.199.110.153",
+    "ip": "185.199.111.153",
+    "record_type": "A",
+    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
+    "cert_id": 13474812221,
+    "expiry": "Fri, 17 Apr 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "f3a660de9e8954b45ed41badc865c9595c065fb66e22c54899cba26728daa2a6",
+    "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "vpn-ca.iad.github.com",
+    "ip": "2606:50c0:8000::153",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13474812221,
@@ -1249,18 +1261,6 @@
   },
   {
     "domain": "vpn-ca.iad.github.com",
-    "ip": "2606:50c0:8003::153",
-    "record_type": "A",
-    "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
-    "cert_id": 13474812221,
-    "expiry": "Fri, 17 Apr 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "f3a660de9e8954b45ed41badc865c9595c065fb66e22c54899cba26728daa2a6",
-    "signature": "rsa 2048",
-    "vulnerability": ""
-  },
-  {
-    "domain": "vpn-ca.iad.github.com",
     "ip": "2606:50c0:8002::153",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
@@ -1273,7 +1273,7 @@
   },
   {
     "domain": "vpn-ca.iad.github.com",
-    "ip": "2606:50c0:8000::153",
+    "ip": "2606:50c0:8003::153",
     "record_type": "A",
     "issuer": "C=GB, O=Sectigo Limited, CN=Sectigo Public Server Authentication CA DV R36",
     "cert_id": 13474812221,
@@ -1281,6 +1281,18 @@
     "version": "V3",
     "serial": "f3a660de9e8954b45ed41badc865c9595c065fb66e22c54899cba26728daa2a6",
     "signature": "rsa 2048",
+    "vulnerability": ""
+  },
+  {
+    "domain": "ws.support.github.com",
+    "ip": "140.82.112.21",
+    "record_type": "A",
+    "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1",
+    "cert_id": 11329216380,
+    "expiry": "Thu, 30 Jul 2026 23:59:59 +0000",
+    "version": "V3",
+    "serial": "6b76163ff4b8b64a581f3fe0890867e6d1ac3980c5bdb2ad955d7285d56a5ae7",
+    "signature": "rsa 4096",
     "vulnerability": ""
   },
   {
@@ -1309,7 +1321,7 @@
   },
   {
     "domain": "ws.support.github.com",
-    "ip": "140.82.113.21",
+    "ip": "140.82.114.21",
     "record_type": "A",
     "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1",
     "cert_id": 11329216380,
@@ -1333,19 +1345,7 @@
   },
   {
     "domain": "ws.support.github.com",
-    "ip": "140.82.114.21",
-    "record_type": "A",
-    "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1",
-    "cert_id": 11329216380,
-    "expiry": "Thu, 30 Jul 2026 23:59:59 +0000",
-    "version": "V3",
-    "serial": "6b76163ff4b8b64a581f3fe0890867e6d1ac3980c5bdb2ad955d7285d56a5ae7",
-    "signature": "rsa 4096",
-    "vulnerability": ""
-  },
-  {
-    "domain": "ws.support.github.com",
-    "ip": "140.82.112.21",
+    "ip": "140.82.113.21",
     "record_type": "A",
     "issuer": "C=US, O=DigiCert Inc, CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1",
     "cert_id": 11329216380,
