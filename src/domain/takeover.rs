@@ -11,14 +11,10 @@ use dns_lookup::lookup_host;
 use percent_encoding::{NON_ALPHANUMERIC, percent_encode};
 use reqwest::{Client, header::AUTHORIZATION};
 use serde::Deserialize;
-use tokio::{
-    sync::Semaphore,
-    task::JoinSet,
-    time::timeout,
-};
+use tokio::{sync::Semaphore, task::JoinSet, time::timeout};
 use tracing::warn;
 use trust_dns_resolver::{
-    AsyncResolver,
+    AsyncResolver, TokioAsyncResolver,
     error::{ResolveError, ResolveErrorKind},
     name_server::{GenericConnection, GenericConnectionProvider, TokioRuntime},
     proto::rr::RecordType,
@@ -128,7 +124,7 @@ pub type Res = AsyncResolver<GenericConnection, GenericConnectionProvider<TokioR
 // Reuse the `SubdomainInfo` struct defined in the parent `domain` module
 // rather than duplicating it here.  This avoids type drift and allows the
 // shared printing/save helpers to operate on the same data type.
-use super::SubdomainInfo;  
+use super::SubdomainInfo;
 
 // ==================== SSLMATE API STRUCTS ====================
 
@@ -268,10 +264,10 @@ impl SSLMateClient {
     }
 
     /// Fetches certificate issuances for a domain and its subdomains.
-    /// 
+    ///
     /// # Arguments
     /// * `domain` - The domain to search for.
-    /// 
+    ///
     /// # Returns
     /// * `Result<Vec<CertSpotterIssuance>>` - A list of issuances on success.
     async fn get_issuances(&self, domain: &str) -> Result<Vec<CertSpotterIssuance>> {
@@ -303,10 +299,10 @@ impl SSLMateClient {
 // ==================== DNS RESOLVER ====================
 
 /// Resolves a domain name to a list of IP addresses.
-/// 
+///
 /// # Arguments
 /// * `domain` - The domain name to resolve.
-/// 
+///
 /// # Returns
 /// * `Result<Vec<String>>` - A list of IP addresses on success.
 pub async fn resolve_domain(domain: &str) -> Result<Vec<String>> {
@@ -327,7 +323,7 @@ pub async fn resolve_domain(domain: &str) -> Result<Vec<String>> {
 // ==================== TAKEOVER CHECK ====================
 
 /// Checks if a subdomain is vulnerable to takeover using the provided DNS resolver.
-/// 
+///
 /// # Arguments
 /// * `info` - The SubdomainInfo to check and update.
 /// * `resolver` - The DNS resolver to use.
@@ -359,11 +355,11 @@ pub async fn check_takeover(info: &mut SubdomainInfo, resolver: &Res) {
 }
 
 /// Resolves the CNAME record for a subdomain.
-/// 
+///
 /// # Arguments
 /// * `info` - The SubdomainInfo containing the domain to resolve.
 /// * `resolver` - The DNS resolver to use.
-/// 
+///
 /// # Returns
 /// * `Result<String>` - The CNAME target if found, Error otherwise.
 pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<String> {
@@ -390,14 +386,209 @@ fn add_vuln(info: &mut SubdomainInfo, msg: &str) {
 // ==================== MAIN ENUMERATION FUNCTION ====================
 
 /// Enumerates subdomains for a domain using SSLMate's CertSpotter API.
-/// 
+///
 /// # Arguments
 /// * `domain` - The target domain to scan.
 /// * `sslmate_key` - The API key for SSLMate.
 /// * `threads` - Number of concurrent threads for resolution.
-/// 
+///
 /// # Returns
 /// * `Result<Vec<SubdomainInfo>>` - A list of discovered subdomains and their details.
+// pub async fn enumerate_subdomains(
+//     domain: &str,
+//     sslmate_key: &str,
+//     threads: usize,
+// ) -> Result<Vec<SubdomainInfo>> {
+//     println!("Searching Domain: {}", domain);
+//     println!(
+//         "\n{}{}",
+//         " Main Domain: ".on_magenta().black().bold(),
+//         domain.on_bright_blue().black().bold()
+//     );
+//     println!("{}", "─".repeat(60).bold());
+
+//     // Initialize client
+//     let sslmate = SSLMateClient::new(sslmate_key.to_string())?;
+
+//     // Get all issuances
+//     let issuances = sslmate.get_issuances(domain).await?;
+
+//     // Build a map of domain to certificate info
+//     let mut domain_to_certs: HashMap<String, Vec<CertSpotterIssuance>> = HashMap::new();
+//     let mut all_subdomains = HashSet::new();
+
+//     for issuance in &issuances {
+//         if let Some(dns_names) = &issuance.dns_names {
+//             for name in dns_names {
+//                 let clean_name = name.trim_start_matches("*.").to_string();
+//                 if clean_name.ends_with(domain) {
+//                     domain_to_certs
+//                         .entry(clean_name.clone())
+//                         .or_default()
+//                         .push(issuance.clone());
+
+//                     if clean_name != domain {
+//                         all_subdomains.insert(clean_name);
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     // Add the main domain
+//     all_subdomains.insert(domain.to_string());
+
+//     // Resolve each subdomain with concurrency control
+//     println!("\nResolving subdomains...");
+//     let mut domain_to_ips: HashMap<String, Vec<String>> = HashMap::new();
+//     let mut set = JoinSet::new();
+//     let semaphore = Arc::new(Semaphore::new(threads));
+
+//     for subdomain in all_subdomains.clone() {
+//         let permit = semaphore.clone();
+
+//         set.spawn(async move {
+//             let _permit = permit.acquire().await;
+//             let ips = resolve_domain(&subdomain).await.unwrap_or_default();
+//             (subdomain, ips)
+//         });
+//     }
+
+//     while let Some(res) = set.join_next().await {
+//         if let Ok((subdomain, ips)) = res {
+//             if !ips.is_empty() {
+//                 domain_to_ips.insert(subdomain, ips);
+//             }
+//             print!(".");
+//         }
+//     }
+//     println!();
+
+//     // Create DNS resolver for takeover checks
+//     let resolver = Arc::new(TokioAsyncResolver::tokio_from_system_conf()?);
+
+//     // Build results
+//     let mut results = Vec::new();
+
+//     for subdomain in all_subdomains {
+//         let certs = domain_to_certs.get(&subdomain).cloned().unwrap_or_default();
+//         let ips = domain_to_ips.get(&subdomain).cloned().unwrap_or_default();
+
+//         // Find the latest cert for this domain
+//         let latest_cert = certs.into_iter().max_by(|a, b| {
+//             let a_date = DateTime::parse_from_rfc3339(&a.not_after).unwrap_or_default();
+//             let b_date = DateTime::parse_from_rfc3339(&b.not_after).unwrap_or_default();
+//             a_date.cmp(&b_date)
+//         });
+
+//         if let Some(cert) = latest_cert {
+//             // Parse expiry
+//             let expiry = DateTime::parse_from_rfc3339(&cert.not_after).unwrap_or_default();
+//             let now = Utc::now();
+//             let expiry_rfc2822 = expiry.to_rfc2822();
+
+//             // Determine record type and vulnerabilities
+//             let (record_type, mut vulnerability) = if ips.is_empty() {
+//                 (
+//                     "DNS_MISSING".to_string(),
+//                     "Potential Takeover: Domain exists in logs but has no DNS records".to_string(),
+//                 )
+//             } else {
+//                 ("A".to_string(), String::new())
+//             };
+
+//             // Add expiry vulnerability
+//             if expiry < now {
+//                 if !vulnerability.is_empty() {
+//                     vulnerability += " | EXPIRED_CERTIFICATE";
+//                 } else {
+//                     vulnerability = "EXPIRED_CERTIFICATE".to_string();
+//                 }
+//             }
+
+//             // Extract certificate details
+//             let serial = cert.tbs_sha256.unwrap_or_else(|| "Unknown".to_string());
+//             let cert_id = cert.id.parse::<u64>().unwrap_or(0);
+
+//             let issuer = cert
+//                 .issuer
+//                 .as_ref()
+//                 .map(|i| i.name.clone().unwrap_or_else(|| i.friendly_name.clone()))
+//                 .unwrap_or_else(|| "Unknown".to_string());
+
+//             let signature = if let Some(pubkey) = &cert.pubkey {
+//                 format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
+//             } else {
+//                 "Unknown".to_string()
+//             };
+
+//             // Check for weak signature
+//             if signature.contains("sha1") || signature.contains("SHA1") {
+//                 if !vulnerability.is_empty() {
+//                     vulnerability += " | WEAK_SIGNATURE_SHA1";
+//                 } else {
+//                     vulnerability = "WEAK_SIGNATURE_SHA1".to_string();
+//                 }
+//             }
+
+//             // Create entries
+//             if !ips.is_empty() {
+//                 for ip in ips {
+//                     results.push(SubdomainInfo {
+//                         domain: subdomain.clone(),
+//                         ip: Some(ip),
+//                         record_type: record_type.clone(),
+//                         issuer: issuer.clone(),
+//                         cert_id,
+//                         expiry: expiry_rfc2822.clone(),
+//                         version: "V3".to_string(),
+//                         serial: serial.clone(),
+//                         signature: signature.clone(),
+//                         vulnerability: vulnerability.clone(),
+//                     });
+//                 }
+//             } else {
+//                 let mut info = SubdomainInfo {
+//                     domain: subdomain.clone(),
+//                     ip: None,
+//                     record_type,
+//                     issuer,
+//                     cert_id,
+//                     expiry: expiry_rfc2822,
+//                     version: "V3".to_string(),
+//                     serial,
+//                     signature,
+//                     vulnerability,
+//                 };
+
+//                 // Check for takeover vulnerabilities when DNS records are missing
+//                 check_takeover(&mut info, &resolver).await;
+//                 results.push(info);
+//             }
+//         }
+//     }
+
+//     // Sort results
+//     results.sort_by(|a, b| a.domain.cmp(&b.domain));
+
+//     Ok(results)
+// }
+
+// use std::collections::HashSet;
+// use std::sync::Arc;
+// use anyhow::{Result};
+// use chrono::{DateTime, Utc};
+// use tokio::{sync::Semaphore, task::JoinSet};
+// use trust_dns_resolver::{TokioAsyncResolver, proto::rr::RecordType};
+
+// // Add to SubdomainInfo struct (in parent module)
+// #[derive(Debug, Default, Serialize, Clone)]
+// pub struct SubdomainInfo {
+//     // ... existing fields
+//     pub cname_target: Option<String>,  // NEW
+//     // ...
+// }
+
 pub async fn enumerate_subdomains(
     domain: &str,
     sslmate_key: &str,
@@ -417,7 +608,7 @@ pub async fn enumerate_subdomains(
     // Get all issuances
     let issuances = sslmate.get_issuances(domain).await?;
 
-    // Build a map of domain to certificate info
+    // Build subdomains + certs map (KEEP ORIGINAL - used later)
     let mut domain_to_certs: HashMap<String, Vec<CertSpotterIssuance>> = HashMap::new();
     let mut all_subdomains = HashSet::new();
 
@@ -438,146 +629,136 @@ pub async fn enumerate_subdomains(
             }
         }
     }
-
-    // Add the main domain
     all_subdomains.insert(domain.to_string());
 
-    // Resolve each subdomain with concurrency control
-    println!("\nResolving subdomains...");
-    let mut domain_to_ips: HashMap<String, Vec<String>> = HashMap::new();
-    let mut set = JoinSet::new();
-    let semaphore = Arc::new(Semaphore::new(threads));
+    // Create resolver
+    let resolver = Arc::new(TokioAsyncResolver::tokio_from_system_conf()?);
+    println!("\nResolving DNS records (CNAME → A/AAAA)...");
 
-    for subdomain in all_subdomains.clone() {
-        let permit = semaphore.clone();
+    // Concurrent DNS resolution: CNAME FIRST, then A/AAAA
+    let mut dns_results = Vec::new();
+    let semaphore = Arc::new(Semaphore::new(threads));
+    let mut set = JoinSet::new();
+
+    for subdomain in all_subdomains {
+        let res_ptr = resolver.clone();
+        let sem_ptr = semaphore.clone();
+        let subdomain_clone = subdomain.clone();
 
         set.spawn(async move {
-            let _permit = permit.acquire().await;
-            let ips = resolve_domain(&subdomain).await.unwrap_or_default();
-            (subdomain, ips)
+            let _permit = sem_ptr.acquire().await.unwrap();
+
+            let mut info = SubdomainInfo {
+                domain: subdomain_clone.clone(),
+                cert_id: 0,
+                ..Default::default()
+            };
+
+            // 1. CNAME FIRST (no chasing)
+            match resolve_cname(&mut info, &res_ptr).await {
+                Ok(cname) => {
+                    info.record_type = "CNAME".to_string();
+                    info.cname_target = Some(cname);
+                }
+                Err(_) => {
+                    // 2. No CNAME → Check A/AAAA
+                    if let Ok(mut ips) = dns_lookup::lookup_host(&subdomain_clone) {
+                        if let Some(ip) = ips.next() {
+                            info.ip = Some(ip.to_string());
+                            info.record_type = "A".to_string();
+                        } else {
+                            info.record_type = "NXDOMAIN".to_string();
+                        }
+                    } else {
+                        info.record_type = "NXDOMAIN".to_string();
+                    }
+                }
+            }
+
+            info
         });
     }
 
+    // Collect ALL DNS results
     while let Some(res) = set.join_next().await {
-        if let Ok((subdomain, ips)) = res {
-            if !ips.is_empty() {
-                domain_to_ips.insert(subdomain, ips);
-            }
-            print!(".");
+        if let Ok(dns_info) = res {
+            dns_results.push(dns_info);
         }
     }
     println!();
 
-    // Build results
-    let mut results = Vec::new();
+    // MERGE DNS + CERT DATA (using ORIGINAL domain_to_certs map)
+    let mut final_results = Vec::new();
+    for mut info in dns_results {
+        // Get certs for this domain (ORIGINAL MAP)
+        let certs = domain_to_certs
+            .get(&info.domain)
+            .cloned()
+            .unwrap_or_default();
 
-    for subdomain in all_subdomains {
-        let certs = domain_to_certs.get(&subdomain).cloned().unwrap_or_default();
-        let ips = domain_to_ips.get(&subdomain).cloned().unwrap_or_default();
-
-        // Find the latest cert for this domain
-        let latest_cert = certs.into_iter().max_by(|a, b| {
+        if let Some(latest_cert) = certs.into_iter().max_by(|a, b| {
             let a_date = DateTime::parse_from_rfc3339(&a.not_after).unwrap_or_default();
             let b_date = DateTime::parse_from_rfc3339(&b.not_after).unwrap_or_default();
             a_date.cmp(&b_date)
-        });
-
-        if let Some(cert) = latest_cert {
-            // Parse expiry
-            let expiry = DateTime::parse_from_rfc3339(&cert.not_after).unwrap_or_default();
+        }) {
+            // Fill ALL cert details (your original logic)
+            let expiry = DateTime::parse_from_rfc3339(&latest_cert.not_after).unwrap_or_default();
             let now = Utc::now();
-            let expiry_rfc2822 = expiry.to_rfc2822();
+            info.expiry = expiry.to_rfc2822();
+            info.cert_id = latest_cert.id.parse::<u64>().unwrap_or(0);
 
-            // Determine record type and vulnerabilities
-            let (record_type, mut vulnerability) = if ips.is_empty() {
-                (
-                    "DNS_MISSING".to_string(),
-                    "Potential Takeover: Domain exists in logs but has no DNS records".to_string(),
-                )
-            } else {
-                ("A".to_string(), String::new())
-            };
-
-            // Add expiry vulnerability
-            if expiry < now {
-                if !vulnerability.is_empty() {
-                    vulnerability += " | EXPIRED_CERTIFICATE";
-                } else {
-                    vulnerability = "EXPIRED_CERTIFICATE".to_string();
-                }
-            }
-
-            // Extract certificate details
-            let serial = cert.tbs_sha256.unwrap_or_else(|| "Unknown".to_string());
-            let cert_id = cert.id.parse::<u64>().unwrap_or(0);
-
-            let issuer = cert
+            let issuer = latest_cert
                 .issuer
                 .as_ref()
                 .map(|i| i.name.clone().unwrap_or_else(|| i.friendly_name.clone()))
                 .unwrap_or_else(|| "Unknown".to_string());
+            info.issuer = issuer;
 
-            let signature = if let Some(pubkey) = &cert.pubkey {
+            let signature = if let Some(pubkey) = &latest_cert.pubkey {
                 format!("{} {}", pubkey.key_type, pubkey.bit_length.unwrap_or(0))
             } else {
                 "Unknown".to_string()
             };
+            info.signature = signature.clone();
+            info.version = "V3".to_string();
+            info.serial = latest_cert
+                .tbs_sha256
+                .unwrap_or_else(|| "Unknown".to_string());
 
-            // Check for weak signature
+            // CERT VULNS
+            let mut vulnerability = String::new();
+            if expiry < now {
+                vulnerability = "EXPIRED_CERTIFICATE".to_string();
+            }
             if signature.contains("sha1") || signature.contains("SHA1") {
-                if !vulnerability.is_empty() {
-                    vulnerability += " | WEAK_SIGNATURE_SHA1";
-                } else {
+                if vulnerability.is_empty() {
                     vulnerability = "WEAK_SIGNATURE_SHA1".to_string();
+                } else {
+                    vulnerability += " | WEAK_SIGNATURE_SHA1";
                 }
             }
+            info.vulnerability = vulnerability;
 
-            // Create entries
-            if !ips.is_empty() {
-                for ip in ips {
-                    results.push(SubdomainInfo {
-                        domain: subdomain.clone(),
-                        ip: Some(ip),
-                        record_type: record_type.clone(),
-                        issuer: issuer.clone(),
-                        cert_id,
-                        expiry: expiry_rfc2822.clone(),
-                        version: "V3".to_string(),
-                        serial: serial.clone(),
-                        signature: signature.clone(),
-                        vulnerability: vulnerability.clone(),
-                    });
-                }
-            } else {
-                results.push(SubdomainInfo {
-                    domain: subdomain.clone(),
-                    ip: None,
-                    record_type,
-                    issuer,
-                    cert_id,
-                    expiry: expiry_rfc2822,
-                    version: "V3".to_string(),
-                    serial,
-                    signature,
-                    vulnerability,
-                });
+            // TAKEOVER: ONLY dangling CNAMEs (CNAME + no IP)
+            if info.record_type == "CNAME" && info.ip.is_none() {
+                check_takeover(&mut info, &resolver).await;
             }
         }
+
+        final_results.push(info);
     }
 
-    // Sort results
-    results.sort_by(|a, b| a.domain.cmp(&b.domain));
-
-    Ok(results)
+    final_results.sort_by(|a, b| a.domain.cmp(&b.domain));
+    Ok(final_results)
 }
 
 /// Runs domain lookup using SSLMate and prints a report.
-/// 
+///
 /// # Arguments
 /// * `target` - The target domain to scan.
 /// * `output` - Optional file path to save the results.
 /// * `threads` - Number of concurrent threads for resolution.
-/// 
+///
 /// # Returns
 /// * `Result<()>` - Ok if successful, Error otherwise.
 pub async fn run_domain_lookup_sslmate(

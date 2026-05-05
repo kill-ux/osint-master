@@ -180,6 +180,7 @@ pub struct SubdomainInfo {
     pub signature: String,
     /// Any identified vulnerabilities or risks.
     pub vulnerability: String,
+    pub cname_target: Option<String>, // Optional field to store CNAME target if applicable
 }
 
 /// Represents basic details extracted from a certificate.
@@ -333,7 +334,6 @@ pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<S
     // Return the first CNAME target found
     for record in lookup.iter() {
         if let Some(cname) = record.as_cname() {
-            // Convert to string and trim the trailing dot
             return Ok(cname.to_string().trim_end_matches('.').to_string());
         }
     }
@@ -352,6 +352,70 @@ pub async fn resolve_cname(info: &mut SubdomainInfo, resolver: &Res) -> Result<S
 /// 
 /// # Returns
 /// * `Result<()>` - Ok if successful, Error otherwise.
+// pub async fn print_report(domins: Vec<SubdomainInfo>, output: Option<String>) -> Result<()> {
+//     println!(
+//         "\n{} {}",
+//         "✔".green().bold(),
+//         format!("Subdomains found: {}", domins.len()).bold()
+//     );
+
+//     let mut vulnerabilities = Vec::new();
+
+//     for info in &domins {
+//         let status_icon = if info.ip.is_some() {
+//             "●".green()
+//         } else {
+//             "○".red()
+//         };
+
+//         println!(
+//             "  {} {} ({})",
+//             status_icon,
+//             info.domain.bright_white().bold(),
+//             info.ip.as_deref().unwrap_or("No IP").dimmed()
+//         );
+
+//         // Print SSL Status
+//         if info.vulnerability.contains("EXPIRED") {
+//             println!("    {} {}", "▓ SSL:".yellow(), info.expiry.red());
+//         } else if !info.expiry.is_empty() {
+//             println!("    {} {}", "▓ SSL:".cyan(), info.expiry.dimmed());
+//         }
+
+//         // Collect vulnerabilities for the summary section
+//         if !info.vulnerability.is_empty() {
+//             vulnerabilities.push(info);
+//         }
+//     }
+
+//     // --- CRITICAL SUMMARY SECTION ---
+//     if !vulnerabilities.is_empty() {
+//         println!(
+//             "\n{}",
+//             "❗ Potential Vulnerabilities & Risks:"
+//                 .on_red()
+//                 .black()
+//                 .bold()
+//         );
+//         for vuln in vulnerabilities {
+//             println!(
+//                 "  {} {}\n    {}",
+//                 "→".red().bold(),
+//                 vuln.domain.bright_white(),
+//                 vuln.vulnerability.yellow().italic()
+//             );
+//         }
+//     }
+
+//     // --- FILE STATUS ---
+//     if let Some(path) = output {
+//         crate::report::save_report(&path, &domins).await?;
+//     }
+
+//     Ok(())
+// }
+
+
 pub async fn print_report(domins: Vec<SubdomainInfo>, output: Option<String>) -> Result<()> {
     println!(
         "\n{} {}",
@@ -368,12 +432,24 @@ pub async fn print_report(domins: Vec<SubdomainInfo>, output: Option<String>) ->
             "○".red()
         };
 
+        // Display IP OR CNAME target (priority to CNAME for takeover detection)
+        let display_info = if info.cname_target.is_some() {
+            format!("CNAME → {}", info.cname_target.as_deref().unwrap_or("unknown").yellow())
+        } else {
+            info.ip.as_deref().unwrap_or("No IP").to_string()
+        };
+
         println!(
             "  {} {} ({})",
             status_icon,
             info.domain.bright_white().bold(),
-            info.ip.as_deref().unwrap_or("No IP").dimmed()
+            display_info.dimmed()
         );
+
+        // Print record type
+        if !info.record_type.is_empty() && info.record_type != "A" {
+            println!("    {} {}", " Type:".cyan(), info.record_type.bright_blue().bold());
+        }
 
         // Print SSL Status
         if info.vulnerability.contains("EXPIRED") {
